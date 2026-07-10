@@ -36,7 +36,8 @@ Track 3 (Agent Society) requires "measurable efficiency gain over single-agent b
 ## Status
 - ✅ 2026-07-09: v0.1 committed — full pipeline working E2E with real Qwen calls (3 samples: EN×2, ZH×1; ~4k tokens/run). 11 offline tests green. Intake prompt fixed (services = separate line items); risk sweep de-noised.
 - ✅ 2026-07-09: Phase 2 dashboard shipped — FastAPI approval UI (submit → live 6-stage progress → risk flags + quote preview iframe → approve/reject → artifacts). **Dev process: code written by Qwen models via scripts/qwen_dev.py** (qwen3-coder-plus backend / qwen-max templates with 1 revision round / qwen-flash runs index), reviewed & accepted by the orchestrator; ledger docs/qwen_dev_ledger.jsonl, total dev cost so far ≈ $0.07 of the $40 budget. E2E verified over HTTP with a real ZH inquiry run. 21 tests green.
-- ⏭ Phase 2.5 (optional tech-depth): thin AgentScope HITL wrapper (RequireUserConfirmEvent demo path).
+- ✅ 2026-07-10: Phase 2.5 shipped — AgentScope 2.0.4 agent path (`quotepilot agent <file>`): pipeline as FunctionTools, finalize_quote permission-gated → native RequireUserConfirmEvent HITL pause, verified live EN+ZH (allow-rule lets assemble_quote through, exactly one human confirm). Core refactored into `core.py` shared by both paths. Written by qwen3-coder-plus (T4), accepted with 4 fixes.
+- ✅ 2026-07-10: Phase 3 prep — FC deployment kit ready: `s.yaml` (fc3 resources layout), `bootstrap`, `deploy/package.sh` (manylinux cp310 vendoring, build verified locally, 43MB), `deploy/README.md` runbook. Serverless Devs CLI installed (~/.local/bin/s). Waiting on user: RAM AccessKey (`s config add`) + Python310 layer ARN → then `s deploy`.
 - ⏭ Phase 3: FC deploy (s.yaml) — **needs user**: Alibaba Cloud account, RAM AccessKey, FC free-trial activation.
 - ⏭ Phase 4: architecture diagram, video, Devpost description, blog post.
 
