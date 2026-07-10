@@ -13,6 +13,7 @@ import secrets
 import time
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+from typing import Callable, Optional
 
 from . import config, llm
 from .audit import AuditTrail
@@ -35,7 +36,9 @@ def run_autopilot(
     gate: ApprovalGate,
     runs_dir: Path | None = None,
     source_name: str = "stdin",
+    progress: Optional[Callable[[str], None]] = None,
 ) -> RunResult:
+    """progress, if given, is called with each stage name as it completes."""
     run_id = _new_run_id()
     run_dir = (runs_dir or config.RUNS_DIR) / run_id
     audit = AuditTrail(run_dir)
@@ -46,6 +49,8 @@ def run_autopilot(
         t0 = time.perf_counter()
         out = fn(*args, **kwargs)
         audit.log("stage_completed", stage=stage, seconds=round(time.perf_counter() - t0, 2))
+        if progress:
+            progress(stage)
         return out
 
     inquiry = timed("intake", intake.parse_inquiry, raw_email, usage)

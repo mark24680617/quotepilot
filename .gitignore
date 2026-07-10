@@ -22,3 +22,4 @@ runs/
 # Session/local state
 .remember/
 .claude/settings.local.json
+.dev_staging/

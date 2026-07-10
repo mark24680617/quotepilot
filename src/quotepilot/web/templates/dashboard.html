@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <div class="card">
+        <h2>收件箱 Inbox</h2>
+        <form method="post" action="/submit">
+            <div id="sample-buttons">
+                {% for sample in samples %}
+                    <button type="button" onclick="fetchSample('{{ sample }}')">加载示例 {{ sample }}</button>
+                {% endfor %}
+            </div>
+            <textarea name="email_text" rows="10" id="email-text"></textarea>
+            <button type="submit">启动自动报价 Run Autopilot</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <h2>进行中 Active</h2>
+        {% if submissions %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>sID</th>
+                        <th>公司 Company</th>
+                        <th>报价单号 Quote Number</th>
+                        <th>总金额 USD Total</th>
+                        <th>状态 Status</th>
+                        <th>创建时间 Created At</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in submissions %}
+                        <tr>
+                            <td><a href="/s/{{ s.sid }}">{{ s.sid }}</a></td>
+                            <td>{{ s.company or '—' }}</td>
+                            <td>{{ s.quote_number or '—' }}</td>
+                            <td>{% if s.total_usd %}${{ s.total_usd }}{% else %}—{% endif %}</td>
+                            <td><span class="badge st-{{ s.status }}">{{ s.status }}</span></td>
+                            <td>{{ s.created_at or '—' }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p>没有正在进行的提交。 No active submissions.</p>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <h2>历史运行 Archive</h2>
+        {% if archived %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>运行 ID Run ID</th>
+                        <th>报价单号 Quote Number</th>
+                        <th>公司 Company</th>
+                        <th>总金额 USD Total</th>
+                        <th>决策 Decision</th>
+                        <th>时间 Timestamp</th>
+                        <th>报价单 Quote</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for a in archived %}
+                        <tr>
+                            <td>{{ a.run_id or '—' }}</td>
+                            <td>{{ a.quote_number or '—' }}</td>
+                            <td>{{ a.company or '—' }}</td>
+                            <td>{% if a.total_usd %}${{ a.total_usd }}{% else %}—{% endif %}</td>
+                            <td><span class="badge st-{{ a.decision }}">{{ a.decision }}</span></td>
+                            <td>{{ a.ts or '—' }}</td>
+                            <td>
+                                {% if a.has_html %}
+                                    <a href="/artifacts/{{ a.run_id }}/{{ a.quote_number }}.html">报价单 Quote</a>
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p>没有历史记录。 No archived runs.</p>
+        {% endif %}
+    </div>
+{% endblock %}
+
+{% block scripts %}
+    <script>
+        function fetchSample(name) {
+            fetch(`/sample/${name}`)
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('email-text').value = data.text;
+                });
+        }
+    </script>
+{% endblock %}

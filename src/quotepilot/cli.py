@@ -27,7 +27,17 @@ def main(argv: list[str] | None = None) -> int:
     )
     run_p.add_argument("--out", type=Path, default=None, help="Runs output dir")
 
+    web_p = sub.add_parser("web", help="Launch the approval dashboard (FastAPI)")
+    web_p.add_argument("--host", default="0.0.0.0")
+    web_p.add_argument("--port", type=int, default=9000)
+
     args = parser.parse_args(argv)
+
+    if args.command == "web":
+        import uvicorn
+
+        uvicorn.run("quotepilot.web.app:app", host=args.host, port=args.port)
+        return 0
 
     gate = AutoApproveGate() if args.auto_approve else CLIGate()
     failures = 0

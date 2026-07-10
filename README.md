@@ -57,6 +57,9 @@ quotepilot run data/samples/*.txt
 
 # demo mode (auto-approve, blocking flags still reject)
 quotepilot run data/samples/*.txt --auto-approve
+
+# approval dashboard (submit inquiries, watch the pipeline, approve/reject)
+quotepilot web            # http://localhost:9000
 ```
 
 Each run writes to `runs/<run-id>/`: `inquiry.json`, `quote.json`,

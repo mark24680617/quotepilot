@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <div class="card">
+        <h2>运行 Run {{ s.sid }} <span class="badge st-{{ s.status }}">{{ s.status }}</span></h2>
+
+        <h3>流程进度 Pipeline Progress</h3>
+        <ul>
+            <li id="stage-intake" class="{% if 'intake' in s.stages %}done{% endif %}">解析询价 intake</li>
+            <li id="stage-fx" class="{% if 'fx' in s.stages %}done{% endif %}">实时汇率 fx</li>
+            <li id="stage-pricing" class="{% if 'pricing' in s.stages %}done{% endif %}">目录定价 pricing</li>
+            <li id="stage-risk_rules" class="{% if 'risk_rules' in s.stages %}done{% endif %}">规则风控 risk_rules</li>
+            <li id="stage-risk_llm_sweep" class="{% if 'risk_llm_sweep' in s.stages %}done{% endif %}">AI 风控扫描 risk_llm_sweep</li>
+            <li id="stage-drafting" class="{% if 'drafting' in s.stages %}done{% endif %}">双语起草 drafting</li>
+        </ul>
+
+        {% if s.status == "running" %}
+            <p>自动驾驶运行中… Autopilot running…</p>
+            <script>
+                setInterval(() => {
+                    fetch(`/s/{{ s.sid }}/state`)
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.status !== "running") {
+                                location.reload();
+                            } else {
+                                data.stages.forEach(stage => {
+                                    const elem = document.getElementById(`stage-${stage}`);
+                                    if (elem) elem.classList.add('done');
+                                });
+                            }
+                        });
+                }, 1500);
+            </script>
+        {% elif s.status == "awaiting_approval" %}
+            <h3>风险标志 Risk Flags</h3>
+            <ul>
+                {% for flag in s.risk_flags %}
+                    <li>
+                        <span class="chip sev-{{ flag.severity }}">{{ flag.severity }}</span>
+                        <span>{{ flag.message_zh }}</span>
+                        <small>{{ flag.message_en }}</small>
+                    </li>
+                {% endfor %}
+            </ul>
+            {% set blocked = s.risk_flags | selectattr('severity', 'equalto', 'block') | list %}
+            {% if summary %}
+                <pre>{{ summary }}</pre>
+            {% endif %}
+            <iframe src="/s/{{ s.sid }}/preview" style="width:100%;height:520px;border:1px solid var(--line);border-radius:8px"></iframe>
+            <form method="post" action="/s/{{ s.sid }}/decision">
+                <input type="text" name="notes" placeholder="备注 Notes (optional)">
+                <button type="submit" name="action" value="approve" class="btn-approve" {% if blocked %}disabled{% endif %}>批准并生成 Approve & Render</button>
+                <button type="submit" name="action" value="reject" class="btn-reject">拒绝 Reject</button>
+                {% if blocked %}
+                    <p>⛔ 存在阻断级风险,不可批准 Blocking flag — approval disabled</p>
+                {% endif %}
+            </form>
+        {% elif s.status in ("approved", "rejected") %}
+            <p>{% if s.status == "approved" %}已批准 Approved{% else %}已拒绝 Rejected{% endif %}</p>
+            <ul>
+                {% for artifact in s.artifacts %}
+                    <li>
+                        <a href="/artifacts/{{ artifact.run_id }}/{{ artifact.filename }}">
+                            {% if artifact.kind == "quote_html" %}报价单 Quote HTML{% endif %}
+                            {% if artifact.kind == "reply_email" %}回复邮件 Reply Email{% endif %}
+                            {% if artifact.kind == "quote_json" %}Quote JSON{% endif %}
+                            {% if artifact.kind == "inquiry" %}Inquiry JSON{% endif %}
+                            {% if artifact.kind == "summary" %}Summary{% endif %}
+                        </a>
+                    </li>
+                {% endfor %}
+            </ul>
+            <p>本次运行消耗 {{ s.tokens }} tokens</p>
+        {% elif s.status == "failed" %}
+            <div class="error-box">
+                <p>错误 Error: {{ s.error }}</p>
+            </div>
+        {% endif %}
+
+        <a href="/">← 返回 Dashboard</a>
+    </div>
+{% endblock %}
