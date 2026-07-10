@@ -28,6 +28,17 @@ Track 3 (Agent Society) requires "measurable efficiency gain over single-agent b
 - Minimal web dashboard (pipeline runs, approvals, audit log) = demo surface for the video.
 - Qwen Code CLI as build assistant (good material for the blog post).
 
+## Research findings (2026-07-09, verified by web research)
+- **AgentScope**: use `agentscope` v2.0.4 (`pip install agentscope`, Py≥3.11). `agentscope-runtime` is ARCHIVED — its capabilities merged into 2.0; do not use. Built-in HITL: permission system emits `RequireUserConfirmEvent` for unmatched tools under `PermissionMode.DEFAULT`; answer with `UserConfirmResultEvent(reply_id=..., confirm_results=[ConfirmResult(...)])`. Qwen: `DashScopeChatModel(credential=DashScopeCredential(api_key, base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1"), model=...)`. v1 `sequential_pipeline`/`MsgHub` no longer exist — chain with plain async Python. **Integrate thin**: one Agent + Toolkit wrapping our stage functions, `render_quote` permission-gated = the HITL demo; embed in our own FastAPI app (built-in Agent Service needs Redis — skip). Fallback to plain-Python HITL if cross-request state fights us past day 2.
+- **FC deployment**: FC 3.0 **Web Function** (custom runtime), FastAPI+uvicorn on **0.0.0.0:9000**, region **ap-southeast-1**. Deploy via Serverless Devs: `npm i -g @serverless-devs/s`, `s config add` (needs RAM user AccessKey w/ AliyunFCFullAccess), `s deploy`; auto public URL `https://{random}.ap-southeast-1.fcapp.run`. Vendor deps with `pip install -r requirements.txt -t ./code --platform manylinux2014_x86_64 --only-binary=:all:`. Attach the Python310 public layer for custom runtime. **s.yaml committed to repo = the deployment-proof code file.** Free trial: 150k CU/month × 3 months. Console zip-upload is the fallback path. Do NOT use built-in python3.10 runtime with HTTP trigger for FastAPI.
+- **FX APIs** (implemented): primary `open.er-api.com/v6/latest/USD` (check `.result=="success"`, use `rates.CNY` onshore, attribution "Rates By Exchange Rate API" required in UI), fallback `api.frankfurter.dev/v1/latest?base=USD&symbols=CNY` (the old .app domain 301s). exchangerate.host is dead for keyless use. Cache 1–24h.
+
+## Status
+- ✅ 2026-07-09: v0.1 committed — full pipeline working E2E with real Qwen calls (3 samples: EN×2, ZH×1; ~4k tokens/run). 11 offline tests green. Intake prompt fixed (services = separate line items); risk sweep de-noised.
+- ⏭ Phase 2: FastAPI dashboard (runs list, quote preview, approve/reject buttons) + thin AgentScope HITL integration.
+- ⏭ Phase 3: FC deploy (s.yaml) — **needs user**: Alibaba Cloud account, RAM AccessKey, FC free-trial activation.
+- ⏭ Phase 4: architecture diagram, video, Devpost description, blog post.
+
 ## Timeline (11 days)
 - Jul 9–10: scaffold + core pipeline (email parse → quote draft) running locally
 - Jul 11–12: HITL checkpoint + dashboard
