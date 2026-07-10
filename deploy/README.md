@@ -11,9 +11,6 @@ file.
 2. **Create a RAM user + AccessKey**: console → RAM → Users → Create User →
    enable *OpenAPI access* → attach policy **AliyunFCFullAccess** → create an
    **AccessKey pair** and save the ID + Secret.
-3. **Find the Python 3.10 public layer ARN**: Function Compute console →
-   Layers → Public layers → Python310 → copy the ARN for ap-southeast-1, and
-   paste it into `s.yaml` under `layers:`.
 
 ## One-time local setup
 
@@ -36,16 +33,18 @@ page + the URL for the hackathon's proof-of-deployment video.
 
 ## Troubleshooting
 
-- **Import errors at cold start** → wheels not manylinux/cp310: rerun
+- **Import errors at cold start** → wheels not manylinux/cp311: rerun
   `deploy/package.sh` (it pins `--platform manylinux2014_x86_64
-  --python-version 310 --only-binary=:all:`).
+  --python-version 311 --only-binary=:all:` — matches the `custom.debian12`
+  image's system Python 3.11.2; `custom.debian10`'s docs-promised Python 3.10
+  does NOT exist in ap-southeast-1, we verified the image only has 3.7).
 - **Connection refused / health-check fail** → server must bind
   `0.0.0.0:9000` (see `bootstrap`); port and `customRuntimeConfig.port` must
   match.
-- **`python3: command not found` or wrong version** → the Python310 layer ARN
-  is missing/wrong in `s.yaml`, or `/opt/python3.10/bin` is not first in the
-  `PATH` env var (adjust to the layer's actual bin path shown on its console
-  page).
+- **3xx responses fail with `ExternalRedirectForbidden`** → the fcapp.run
+  system domain forbids HTTP redirects; the app therefore uses meta-refresh
+  pages instead of 303s (see `_goto()` in `web/app.py`). Keep it that way
+  unless you attach a custom domain.
 - **Logs**: `s logs -t` (or FC console → function → Logs).
 - **Runs disappear** → expected: /tmp is per-instance and ephemeral; the demo
   is designed around a single warm instance.

@@ -22,9 +22,12 @@ resources:
       region: ${vars.region}
       functionName: quotepilot
       description: QuotePilot — email-to-quote autopilot dashboard (Qwen on Alibaba Cloud)
-      runtime: custom
+      # custom.debian12 (Debian 12 bookworm) ships system Python 3.11.2 —
+      # no interpreter layer needed (verified by in-instance probe 2026-07-10).
+      runtime: custom.debian12
       customRuntimeConfig:
         command:
+          - bash
           - /code/bootstrap
         port: 9000
       cpu: 0.35
@@ -37,11 +40,6 @@ resources:
         QWEN_BASE_URL: https://dashscope-intl.aliyuncs.com/compatible-mode/v1
         QP_RUNS_DIR: /tmp/runs
         PYTHONPATH: /code/vendor:/code/src
-        PATH: /opt/python3.10/bin:/usr/local/bin:/usr/bin:/bin
-      # ATTENTION: paste the current Python 3.10 public layer ARN for
-      # ap-southeast-1 (FC console → Layers → Public layers) before deploying.
-      layers:
-        - acs:fc:ap-southeast-1:official:layers/Python310/versions/LATEST # <-- REPLACE
       code: ./
       triggers:
         - triggerName: httpTrigger

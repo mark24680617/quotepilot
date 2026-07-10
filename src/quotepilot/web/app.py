@@ -9,7 +9,7 @@ from typing import Any, Callable
 from uuid import uuid4
 
 from fastapi import FastAPI, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 from quotepilot.config import DATA_DIR, RUNS_DIR
@@ -130,6 +130,15 @@ def sub_view(sub: Submission) -> dict[str, Any]:
     }
 
 
+
+
+def _goto(url: str) -> HTMLResponse:
+    """Client-side redirect: FC's fcapp.run system domain forbids 3xx responses."""
+    return HTMLResponse(
+        f'<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url={url}">'
+        f'</head><body><a href="{url}">Continue → {url}</a></body></html>'
+    )
+
 app = FastAPI(title="QuotePilot")
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
@@ -182,7 +191,7 @@ async def get_sample(name: str):
     return {"name": name, "text": content}
 
 
-@app.post("/submit", response_class=RedirectResponse)
+@app.post("/submit")
 async def submit_email(email_text: str = Form(..., min_length=20)):
     email_text = email_text.strip()
     if len(email_text) < 20:
@@ -236,7 +245,7 @@ async def submit_email(email_text: str = Form(..., min_length=20)):
     thread = threading.Thread(target=process_submission, daemon=True)
     thread.start()
     
-    return RedirectResponse(url=f"/s/{sid}", status_code=303)
+    return _goto(f"/s/{sid}")
 
 
 def update_submission_status(sid: str, status: str):
@@ -294,7 +303,7 @@ async def get_preview(sid: str):
     return HTMLResponse(content=html_content)
 
 
-@app.post("/s/{sid}/decision", response_class=RedirectResponse)
+@app.post("/s/{sid}/decision")
 async def make_decision(sid: str, action: str = Form(...), notes: str | None = Form(None)):
     with SUBMISSIONS_LOCK:
         submission = SUBMISSIONS.get(sid)
@@ -315,7 +324,7 @@ async def make_decision(sid: str, action: str = Form(...), notes: str | None = F
     if not success:
         raise HTTPException(status_code=409, detail="Decision could not be processed")
     
-    return RedirectResponse(url=f"/s/{sid}", status_code=303)
+    return _goto(f"/s/{sid}")
 
 
 @app.get("/artifacts/{run_id}/{filename}")

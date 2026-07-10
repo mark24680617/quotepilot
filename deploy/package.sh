@@ -17,7 +17,7 @@ cp deploy/requirements.txt ./.deploy_build/
 
 # Install dependencies into vendor directory
 cd ./.deploy_build
-python3 -m pip install -r requirements.txt -t vendor --platform manylinux2014_x86_64 --python-version 310 --only-binary=:all:
+python3 -m pip install -r requirements.txt -t vendor --platform manylinux2014_x86_64 --python-version 311 --only-binary=:all:
 
 # Make bootstrap executable
 chmod +x bootstrap
