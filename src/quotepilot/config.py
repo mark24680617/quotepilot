@@ -27,7 +27,8 @@ CODER_MODEL = os.getenv("QWEN_CODER_MODEL", "qwen3-coder-plus")
 DATA_DIR = PROJECT_ROOT / "data"
 CATALOG_PATH = DATA_DIR / "catalog.json"
 TEMPLATES_DIR = PROJECT_ROOT / "templates"
-RUNS_DIR = PROJECT_ROOT / "runs"
+# On Alibaba Cloud Function Compute only /tmp is writable — override there.
+RUNS_DIR = Path(os.getenv("QP_RUNS_DIR", PROJECT_ROOT / "runs"))
 
 # --- Seller identity ---
 SELLER = {

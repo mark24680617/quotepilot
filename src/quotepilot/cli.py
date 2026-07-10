@@ -31,12 +31,22 @@ def main(argv: list[str] | None = None) -> int:
     web_p.add_argument("--host", default="0.0.0.0")
     web_p.add_argument("--port", type=int, default=9000)
 
+    agent_p = sub.add_parser("agent", help="Run via AgentScope 2.0 agent (HITL through permission events)")
+    agent_p.add_argument("file", type=Path, help="Raw inquiry email text file")
+    agent_p.add_argument("--yes", action="store_true", help="Auto-confirm the approval gate (demo)")
+
     args = parser.parse_args(argv)
 
     if args.command == "web":
         import uvicorn
 
         uvicorn.run("quotepilot.web.app:app", host=args.host, port=args.port)
+        return 0
+
+    if args.command == "agent":
+        from .agent_runner import main_sync
+
+        main_sync(args.file.read_text(encoding="utf-8"), auto_confirm=args.yes)
         return 0
 
     gate = AutoApproveGate() if args.auto_approve else CLIGate()

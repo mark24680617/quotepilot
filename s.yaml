@@ -1,0 +1,54 @@
+# ============================================================================
+# QuotePilot — Alibaba Cloud Function Compute (FC 3.0) deployment
+# This file is the hackathon's Alibaba Cloud DEPLOYMENT PROOF.
+#
+# Deploy:
+#   1. bash deploy/package.sh          # builds ./.deploy_build with vendored deps
+#   2. export QWEN_API_KEY=sk-...      # from .env — never commit it
+#   3. cd .deploy_build && s deploy
+#   4. s info                          # shows the public fcapp.run URL
+# ============================================================================
+edition: 3.0.0
+name: quotepilot
+access: default
+
+vars:
+  region: ap-southeast-1
+
+resources:
+  quotepilot:
+    component: fc3
+    props:
+      region: ${vars.region}
+      functionName: quotepilot
+      description: QuotePilot — email-to-quote autopilot dashboard (Qwen on Alibaba Cloud)
+      runtime: custom
+      customRuntimeConfig:
+        command:
+          - /code/bootstrap
+        port: 9000
+      cpu: 0.35
+      memorySize: 512
+      diskSize: 512
+      timeout: 300
+      instanceConcurrency: 10
+      environmentVariables:
+        QWEN_API_KEY: ${env(QWEN_API_KEY)}
+        QWEN_BASE_URL: https://dashscope-intl.aliyuncs.com/compatible-mode/v1
+        QP_RUNS_DIR: /tmp/runs
+        PYTHONPATH: /code/vendor:/code/src
+        PATH: /opt/python3.10/bin:/usr/local/bin:/usr/bin:/bin
+      # ATTENTION: paste the current Python 3.10 public layer ARN for
+      # ap-southeast-1 (FC console → Layers → Public layers) before deploying.
+      layers:
+        - acs:fc:ap-southeast-1:official:layers/Python310/versions/LATEST # <-- REPLACE
+      code: ./
+      triggers:
+        - triggerName: httpTrigger
+          triggerType: http
+          triggerConfig:
+            authType: anonymous
+            methods:
+              - GET
+              - POST
+              - HEAD
