@@ -1,0 +1,94 @@
+{
+  "currency": "USD",
+  "items": [
+    {
+      "sku": "CR-ENT",
+      "name_en": "CitizenReady AI — Enterprise License",
+      "name_zh": "CitizenReady AI 企业版许可",
+      "description_en": "AI-powered citizenship & immigration prep platform, enterprise seat license, annual.",
+      "description_zh": "AI 驱动的入籍与移民备考平台,企业席位年度许可。",
+      "unit": "seat/year",
+      "unit_zh": "席位/年",
+      "unit_price_usd": "290.00",
+      "volume_discounts": [
+        { "min_qty": 50, "pct": 8 },
+        { "min_qty": 100, "pct": 12 },
+        { "min_qty": 300, "pct": 18 }
+      ]
+    },
+    {
+      "sku": "CR-ONB",
+      "name_en": "CitizenReady AI — Onboarding & Integration",
+      "name_zh": "CitizenReady AI 部署与集成服务",
+      "description_en": "One-time onboarding: SSO integration, admin training, data import.",
+      "description_zh": "一次性部署服务:单点登录集成、管理员培训、数据导入。",
+      "unit": "one-time",
+      "unit_zh": "一次性",
+      "unit_price_usd": "4800.00",
+      "volume_discounts": []
+    },
+    {
+      "sku": "RN-SAAS",
+      "name_en": "RentalNote — Property SaaS Subscription",
+      "name_zh": "RentalNote 物业 SaaS 订阅",
+      "description_en": "Rental management SaaS, billed per managed property, annual subscription.",
+      "description_zh": "租赁管理 SaaS,按管理物业数量计费,年度订阅。",
+      "unit": "property/year",
+      "unit_zh": "物业/年",
+      "unit_price_usd": "59.00",
+      "volume_discounts": [
+        { "min_qty": 100, "pct": 10 },
+        { "min_qty": 500, "pct": 15 }
+      ]
+    },
+    {
+      "sku": "WR-API",
+      "name_en": "WealthRank — Scoring API",
+      "name_zh": "WealthRank 评分 API",
+      "description_en": "Wealth scoring & ranking API access, billed per 10,000 calls.",
+      "description_zh": "财富评分与排名 API 访问,按每一万次调用计费。",
+      "unit": "10k calls",
+      "unit_zh": "万次调用",
+      "unit_price_usd": "120.00",
+      "volume_discounts": [
+        { "min_qty": 100, "pct": 10 },
+        { "min_qty": 500, "pct": 20 }
+      ]
+    },
+    {
+      "sku": "TTS-LIC",
+      "name_en": "Ten Thousand Suns — Content License",
+      "name_zh": "Ten Thousand Suns 内容授权",
+      "description_en": "Interactive content title license, per title, annual.",
+      "description_zh": "互动内容作品授权,按作品计,年度。",
+      "unit": "title/year",
+      "unit_zh": "作品/年",
+      "unit_price_usd": "1500.00",
+      "volume_discounts": []
+    },
+    {
+      "sku": "SVC-DEV",
+      "name_en": "Custom Development Services",
+      "name_zh": "定制开发服务",
+      "description_en": "Senior engineer custom development, per person-day.",
+      "description_zh": "资深工程师定制开发,按人天计。",
+      "unit": "person-day",
+      "unit_zh": "人天",
+      "unit_price_usd": "950.00",
+      "volume_discounts": [
+        { "min_qty": 20, "pct": 5 }
+      ]
+    },
+    {
+      "sku": "SVC-SUP",
+      "name_en": "Premium Support Plan",
+      "name_zh": "高级支持服务计划",
+      "description_en": "Priority support, 8x5 PT business hours, dedicated channel, annual plan.",
+      "description_zh": "优先支持,太平洋时间工作日 8x5,专属沟通渠道,年度计划。",
+      "unit": "year",
+      "unit_zh": "年",
+      "unit_price_usd": "6000.00",
+      "volume_discounts": []
+    }
+  ]
+}

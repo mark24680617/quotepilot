@@ -1,0 +1,21 @@
+From: Lily Chen <lily@fintechlab.sh.cn>
+To: sales@luqlabs.com
+Subject: URGENT - WealthRank API pricing + custom integration
+
+Hi,
+
+We're a Shanghai-based fintech startup. We evaluated the WealthRank scoring
+API and want to move fast — we need to go live next week.
+
+Requirements:
+- WealthRank API, estimated 2 million calls per year (so 200 units of your
+  10k-call package)
+- Custom integration work by your engineers, we estimate 15 person-days
+
+Given the volume, can you give us a 20% discount on the total package?
+
+Also: do you offer a sandbox environment during integration?
+
+Thanks,
+Lily Chen
+CTO, FintechLab Shanghai

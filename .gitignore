@@ -1,0 +1,24 @@
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+*.key
+
+# OS / editor
+.DS_Store
+
+# Node
+node_modules/
+dist/
+
+# Python
+__pycache__/
+.venv/
+*.pyc
+
+# Run outputs (demo artifacts regenerate on each run)
+runs/
+
+# Session/local state
+.remember/
+.claude/settings.local.json
