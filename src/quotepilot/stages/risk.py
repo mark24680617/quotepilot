@@ -11,6 +11,7 @@ from decimal import Decimal
 from pydantic import BaseModel, Field
 
 from .. import config, llm
+from ..profile import CompanyProfile
 from ..models import Inquiry, PricedLine, RiskFlag, UnmatchedRequest
 
 _FAPIAO_TOKENS = ("发票", "增值税", "fapiao", "vat invoice")
@@ -23,7 +24,9 @@ def rule_flags(
     unmatched: list[UnmatchedRequest],
     total_usd: Decimal,
     raw_email: str,
+    profile: CompanyProfile,
 ) -> list[RiskFlag]:
+    rules = profile.rules
     flags: list[RiskFlag] = []
     lowered = raw_email.lower()
 
@@ -46,42 +49,42 @@ def rule_flags(
             )
         )
 
-    if total_usd >= config.WIRE_THRESHOLD_USD:
+    if total_usd >= rules.wire_threshold_usd:
         flags.append(
             RiskFlag(
                 code="WIRE_RECOMMENDED",
                 severity="info",
                 message_en=(
-                    f"Order total USD {total_usd:,} exceeds {config.WIRE_THRESHOLD_USD:,} — "
+                    f"Order total USD {total_usd:,} exceeds {rules.wire_threshold_usd:,} — "
                     "recommend wire transfer and China outbound-payment tax filing."
                 ),
                 message_zh=(
-                    f"订单总额 {total_usd:,} 美元超过 {config.WIRE_THRESHOLD_USD:,} 美元——"
+                    f"订单总额 {total_usd:,} 美元超过 {rules.wire_threshold_usd:,} 美元——"
                     "建议采用电汇并办理对外支付税务备案。"
                 ),
             )
         )
 
     req_pct = inquiry.requested_terms.discount_request_pct
-    if req_pct is not None and req_pct > config.MAX_EXTRA_DISCOUNT_PCT:
+    if req_pct is not None and req_pct > rules.max_extra_discount_pct:
         flags.append(
             RiskFlag(
                 code="DISCOUNT_ABOVE_FLOOR",
                 severity="warn",
                 message_en=(
                     f"Customer asked for {req_pct}% discount; policy floor is "
-                    f"{config.MAX_EXTRA_DISCOUNT_PCT}%. Quote applies volume tiers only — "
+                    f"{rules.max_extra_discount_pct}%. Quote applies volume tiers only — "
                     "extra discount needs management approval."
                 ),
                 message_zh=(
-                    f"客户要求 {req_pct}% 折扣;政策底线为 {config.MAX_EXTRA_DISCOUNT_PCT}%。"
+                    f"客户要求 {req_pct}% 折扣;政策底线为 {rules.max_extra_discount_pct}%。"
                     "本报价仅按数量阶梯折扣——额外折扣需管理层批准。"
                 ),
             )
         )
 
     days = inquiry.requested_terms.deadline_days
-    if days is not None and days <= config.URGENT_DEADLINE_DAYS:
+    if days is not None and days <= rules.urgent_deadline_days:
         flags.append(
             RiskFlag(
                 code="TIGHT_DEADLINE",
@@ -127,13 +130,14 @@ class _LLMFlags(BaseModel):
 def llm_sweep(
     raw_email: str,
     inquiry: Inquiry,
+    profile: CompanyProfile,
     usage: llm.UsageTracker | None = None,
 ) -> list[RiskFlag]:
     """Ask qwen-flash for anything unusual the rules missed. Advisory only."""
     try:
         result = llm.structured(
             config.WORKER_MODEL,
-            "You are a cross-border B2B deal-desk reviewer for a US software seller "
+            f"You are a cross-border B2B deal-desk reviewer for {profile.seller.name_en} "
             "whose NORMAL customer base is mainland-Chinese companies. Given an "
             "inquiry email and its extraction, list only UNUSUAL, high-signal "
             "commercial/legal/compliance concerns a rules engine might miss "

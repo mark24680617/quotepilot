@@ -14,6 +14,7 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 from .. import config, llm
+from ..profile import CompanyProfile
 from ..models import (
     CatalogItem,
     FxRate,
@@ -25,11 +26,6 @@ from ..models import (
 )
 
 CENT = Decimal("0.01")
-
-
-def load_catalog() -> list[CatalogItem]:
-    data = json.loads(config.CATALOG_PATH.read_text(encoding="utf-8"))
-    return [CatalogItem.model_validate(item) for item in data["items"]]
 
 
 def _deterministic_match(req: LineRequest, catalog: list[CatalogItem]) -> Optional[CatalogItem]:
@@ -98,9 +94,10 @@ def volume_discount_pct(item: CatalogItem, qty: Decimal) -> Decimal:
 def price_inquiry(
     inquiry: Inquiry,
     fx: FxRate,
+    profile: CompanyProfile,
     usage: llm.UsageTracker | None = None,
 ) -> tuple[list[PricedLine], list[UnmatchedRequest]]:
-    catalog = load_catalog()
+    catalog = profile.catalog
     lines: list[PricedLine] = []
     unmatched: list[UnmatchedRequest] = []
 

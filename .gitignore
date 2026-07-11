@@ -24,3 +24,6 @@ runs/
 .claude/settings.local.json
 .dev_staging/
 .deploy_build/
+
+# Local writable profile store (bundled default stays pristine)
+data/company_profile.local.json

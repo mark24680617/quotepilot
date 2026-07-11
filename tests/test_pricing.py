@@ -1,9 +1,11 @@
 from decimal import Decimal
 
 from quotepilot.models import FxRate, Inquiry, LineRequest
+from quotepilot.profile import load_profile
 from quotepilot.stages import pricing
 
 FX = FxRate(rate=Decimal("7.20"), source="test", as_of="2026-07-09T00:00:00Z")
+PROFILE = load_profile()
 
 
 def make_inquiry(requests):
@@ -11,8 +13,7 @@ def make_inquiry(requests):
 
 
 def test_catalog_loads():
-    catalog = pricing.load_catalog()
-    skus = {c.sku for c in catalog}
+    skus = {c.sku for c in PROFILE.catalog}
     assert {"CR-ENT", "RN-SAAS", "SVC-DEV"} <= skus
 
 
@@ -20,7 +21,7 @@ def test_deterministic_match_and_volume_discount():
     inquiry = make_inquiry(
         [LineRequest(product_name="CitizenReady AI", quantity=Decimal("80"))]
     )
-    lines, unmatched = pricing.price_inquiry(inquiry, FX)
+    lines, unmatched = pricing.price_inquiry(inquiry, FX, PROFILE)
     assert not unmatched
     assert len(lines) == 1
     line = lines[0]
@@ -33,7 +34,7 @@ def test_deterministic_match_and_volume_discount():
 
 def test_missing_quantity_goes_unmatched():
     inquiry = make_inquiry([LineRequest(product_name="RentalNote", quantity=None)])
-    lines, unmatched = pricing.price_inquiry(inquiry, FX)
+    lines, unmatched = pricing.price_inquiry(inquiry, FX, PROFILE)
     assert not lines
     assert len(unmatched) == 1
     assert "Quantity" in unmatched[0].reason
@@ -46,7 +47,7 @@ def test_totals():
             LineRequest(product_name="CR-ONB", quantity=Decimal("1")),
         ]
     )
-    lines, _ = pricing.price_inquiry(inquiry, FX)
+    lines, _ = pricing.price_inquiry(inquiry, FX, PROFILE)
     subtotal, discount, total, total_cny = pricing.totals(lines, FX)
     assert subtotal == Decimal("28000.00")  # 23200 + 4800
     assert discount == Decimal("1856.00")  # 8% of 23200

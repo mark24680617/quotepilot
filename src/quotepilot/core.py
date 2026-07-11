@@ -9,13 +9,14 @@ import secrets
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
-from . import config, llm
+from . import llm
 from .models import Customer, Inquiry, QuoteDraft
+from .profile import CompanyProfile, load_profile
 from .stages import drafting, fx, intake, pricing, render, risk
 
 
-def new_quote_number() -> str:
-    return f"LUQ-Q-{datetime.now(timezone.utc):%Y%m%d}-{secrets.token_hex(2).upper()}"
+def new_quote_number(prefix: str) -> str:
+    return f"{prefix}-Q-{datetime.now(timezone.utc):%Y%m%d}-{secrets.token_hex(2).upper()}"
 
 
 def assemble_quote_draft(
@@ -29,30 +30,32 @@ def assemble_quote_draft(
         if on_stage:
             on_stage(stage)
 
-    inquiry = intake.parse_inquiry(raw_email, usage)
+    profile = load_profile()
+    inquiry = intake.parse_inquiry(raw_email, profile, usage)
     note("intake")
     rate = fx.get_usd_cny()
     note("fx")
-    lines, unmatched = pricing.price_inquiry(inquiry, rate, usage)
+    lines, unmatched = pricing.price_inquiry(inquiry, rate, profile, usage)
     subtotal, discount, total, total_cny = pricing.totals(lines, rate)
     note("pricing")
-    flags = risk.rule_flags(inquiry, lines, unmatched, total, raw_email)
+    flags = risk.rule_flags(inquiry, lines, unmatched, total, raw_email, profile)
     note("risk_rules")
-    flags += risk.llm_sweep(raw_email, inquiry, usage)
+    flags += risk.llm_sweep(raw_email, inquiry, profile, usage)
     note("risk_llm_sweep")
-    cover = drafting.draft_cover(inquiry, lines, flags, usage)
+    cover = drafting.draft_cover(inquiry, lines, flags, profile, usage)
     note("drafting")
 
     today = date.today()
     extra_en, extra_zh = [], []
-    if any(f.code == "FAPIAO_REQUEST" for f in flags):
-        extra_en.append(config.TERMS["tax_note_en"])
-        extra_zh.append(config.TERMS["tax_note_zh"])
+    if any(f.code == "FAPIAO_REQUEST" for f in flags) and profile.terms.tax_note_en:
+        extra_en.append(profile.terms.tax_note_en)
+        extra_zh.append(profile.terms.tax_note_zh)
 
     quote = QuoteDraft(
-        quote_number=new_quote_number(),
+        quote_number=new_quote_number(profile.rules.quote_prefix),
+        seller=profile.seller,
         issue_date=today,
-        valid_until=today + timedelta(days=config.QUOTE_VALIDITY_DAYS),
+        valid_until=today + timedelta(days=profile.rules.quote_validity_days),
         customer=Customer(
             contact_name=inquiry.contact_name or "—",
             company=inquiry.company or "—",
@@ -66,10 +69,10 @@ def assemble_quote_draft(
         total_cny=total_cny,
         fx=rate,
         cover=cover,
-        payment_terms_en=config.TERMS["payment_en"],
-        payment_terms_zh=config.TERMS["payment_zh"],
-        legal_en=config.TERMS["legal_en"],
-        legal_zh=config.TERMS["legal_zh"],
+        payment_terms_en=profile.terms.payment_en,
+        payment_terms_zh=profile.terms.payment_zh,
+        legal_en=profile.terms.legal_en,
+        legal_zh=profile.terms.legal_zh,
         extra_notes_en=extra_en,
         extra_notes_zh=extra_zh,
         risk_flags=flags,

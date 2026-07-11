@@ -9,8 +9,10 @@ from quotepilot.models import (
     QuoteDraft,
     RiskFlag,
 )
+from quotepilot.profile import load_profile
 from quotepilot.stages import render
-from quotepilot import config
+
+PROFILE = load_profile()
 
 
 def make_quote():
@@ -29,6 +31,7 @@ def make_quote():
     )
     return QuoteDraft(
         quote_number="LUQ-Q-20260709-TEST",
+        seller=PROFILE.seller,
         issue_date=date(2026, 7, 9),
         valid_until=date(2026, 8, 8),
         customer=Customer(contact_name="Wei Zhang", company="HZ Precision", email="w@x.cn"),
@@ -44,10 +47,10 @@ def make_quote():
             answers_en="Yes, wire transfer is available.",
             answers_zh="可以,支持电汇付款。",
         ),
-        payment_terms_en=config.TERMS["payment_en"],
-        payment_terms_zh=config.TERMS["payment_zh"],
-        legal_en=config.TERMS["legal_en"],
-        legal_zh=config.TERMS["legal_zh"],
+        payment_terms_en=PROFILE.terms.payment_en,
+        payment_terms_zh=PROFILE.terms.payment_zh,
+        legal_en=PROFILE.terms.legal_en,
+        legal_zh=PROFILE.terms.legal_zh,
         risk_flags=[
             RiskFlag(code="X", severity="info", message_en="note", message_zh="备注")
         ],

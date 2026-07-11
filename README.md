@@ -6,15 +6,23 @@ Built for the [Global AI Hackathon Series with Qwen Cloud](https://qwencloud-hac
 
 ## The problem
 
-A US software company selling to Chinese enterprise customers answers every
+Companies selling cross-border to Chinese enterprise customers answer every
 inquiry email by hand: parse the ask (often in Chinese), look up pricing,
 apply volume discounts, convert USD⇄CNY at today's rate, draft a bilingual
-quote with the right cross-border legal terms (HKIAC arbitration, Chinese
-text controlling, no-fapiao tax notes), and reply. It takes 1–2 hours per
-inquiry and mistakes in the legal/tax details are expensive.
+quote with the right cross-border legal terms (arbitration clause, controlling
+language, tax notes), and reply. It takes 1–2 hours per inquiry and mistakes
+in the legal/tax details are expensive.
 
 QuotePilot does the whole run in under a minute, pauses once for a human
 approve/reject, and leaves a full audit trail.
+
+**Multi-company by design**: seller identity, legal terms, business rules and
+the product catalog live in a `CompanyProfile` (editable in the Settings UI,
+`PUT /api/profile`) — the bundled profile (LUQ LABS, a real California
+software company) is just the demo. Onboarding is AI-assisted: point
+`POST /api/profile/import` at your website and Qwen reads it, extracting your
+company info and product catalog as a reviewable draft. Legal terms are never
+AI-written.
 
 ## Pipeline
 

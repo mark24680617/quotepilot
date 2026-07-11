@@ -4,8 +4,8 @@ from decimal import Decimal
 
 from fastapi.testclient import TestClient
 
-from quotepilot import config
 from quotepilot.models import CoverLetters, Customer, FxRate, QuoteDraft, RiskFlag
+from quotepilot.profile import load_profile
 from quotepilot.web.app import WebGate, app
 
 client = TestClient(app)
@@ -14,6 +14,7 @@ client = TestClient(app)
 def make_quote(severity="info"):
     return QuoteDraft(
         quote_number="LUQ-Q-TEST-0001",
+        seller=load_profile().seller,
         issue_date=date(2026, 7, 9),
         valid_until=date(2026, 8, 8),
         customer=Customer(contact_name="T", company="TestCo", email="t@x.cn"),

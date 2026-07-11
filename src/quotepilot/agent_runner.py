@@ -118,7 +118,7 @@ async def run_agent(email_text: str, auto_confirm: bool = False) -> str:
     agent = Agent(
         name="QuotePilotAgent",
         system_prompt=(
-            "You are QuotePilot's autopilot orchestrator for LUQ LABS. "
+            "You are QuotePilot's autopilot orchestrator for the configured seller. "
             "Given a raw inquiry email you MUST call assemble_quote exactly once, "
             "review the returned summary, then call finalize_quote with the "
             "returned quote number. Afterwards reply with a short completion report "

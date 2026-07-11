@@ -1,0 +1,968 @@
+# Task T9: settings view + resilience for the QuotePilot static frontend
+
+Modify `docs/index.html` (complete current file at the bottom — re-emit the
+COMPLETE updated file). Two work packages:
+
+## A. Settings view (`#/settings`)
+
+Add a header nav link "⚙️ 设置 Settings" (right side of the sticky header).
+New route `#/settings`:
+
+1. On enter: `GET {API}/api/profile` → populate the form.
+2. **✨ AI 导入 Import from website** card (top): URL input + button
+   "抓取并识别 Fetch & Extract" → `POST {API}/api/profile/import` JSON
+   `{"url": ...}` (this can take 15-30s — show a spinner note "Qwen 正在阅读
+   网站… reading the website"). On success: fill ONLY the company-info and
+   catalog sections from `resp.draft`, show `resp.note` and, if
+   `resp.needs_price` is non-empty, a warning listing items needing prices.
+   On 502/422 show the error inline.
+3. **公司信息 Company** card: inputs for seller.name_en, name_zh,
+   jurisdiction_en, jurisdiction_zh, website, email; textarea for description.
+4. **条款与规则 Terms & Rules** card: textareas payment_en/zh, legal_en/zh,
+   tax_note_en/zh; number inputs rules.quote_validity_days,
+   rules.urgent_deadline_days; text inputs rules.wire_threshold_usd,
+   rules.max_extra_discount_pct, rules.quote_prefix. Small print: "法律条款不会
+   被 AI 导入覆盖 Legal terms are never AI-overwritten."
+5. **产品目录 Catalog** card: table with editable inputs per row — sku,
+   name_en, name_zh, unit, unit_zh, unit_price_usd, discounts (text input in
+   the compact form `50:8, 100:12` meaning min_qty:pct pairs; parse/serialize
+   both ways; empty = none) — plus a delete button per row and "＋ 添加产品
+   Add product" button. Keep description_en/description_zh as hidden fields
+   preserved from loaded data (do not lose them on save; new rows get "").
+6. Sticky bottom bar in the view: "保存配置 Save Settings" → build the full
+   CompanyProfile JSON (seller/terms/rules/catalog — include descriptions;
+   volume_discounts rebuilt from the compact text) → `PUT {API}/api/profile`
+   → success toast "已保存 Saved ✓" / inline error on 422.
+7. Demo note under the save bar: "演示环境:配置保存在当前服务实例,实例回收后
+   恢复默认档案。Demo: settings persist on the warm instance only."
+
+The quote pipeline reads the profile server-side — after saving, new
+submissions use the new company automatically (no frontend change needed).
+
+## B. Resilience fixes (current behavior breaks during cold starts/redeploys)
+
+1. **Polling must self-heal**: in the submission-view poll loop, a fetch
+   failure must NOT replace the view with the error card. Keep the view, show
+   a small inline banner "连接中断,自动重试中… reconnecting…", keep polling;
+   clear the banner on the next success. Only after 20 CONSECUTIVE failures
+   stop and show the error view.
+2. **Recycled state**: if `GET {API}/api/s/{sid}` returns 404, show a friendly
+   card instead of the generic error: "该运行的内存状态已随演示实例回收
+   (serverless demo)。请返回 Dashboard 重新提交。This run's in-memory state was
+   recycled — please submit again." with a "← 返回 Dashboard" link.
+3. **Cold-start tolerant bootstrap**: dashboard load should auto-retry
+   `GET /api/bootstrap` up to 3 times (2s, 5s, 10s backoff) showing "服务冷启动
+   中,请稍候… cold start…" before falling back to the error card.
+
+Keep ALL existing behavior, design tokens, and the escaping discipline
+(esc() for every server string). Vanilla JS only, no external resources.
+
+## Current file
+
+```html
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QuotePilot 🛩️</title>
+    <style>
+        :root {
+            --ink: #1a1d24;
+            --muted: #6b7280;
+            --line: #e5e7eb;
+            --accent: #0f4c81;
+            --soft: #f4f6f9;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif;
+            background-color: var(--soft);
+            color: var(--ink);
+            line-height: 1.6;
+        }
+        
+        .header {
+            position: sticky;
+            top: 0;
+            background: white;
+            padding: 16px 24px;
+            border-bottom: 1px solid var(--line);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .brand {
+            font-size: 24px;
+            font-weight: bold;
+            color: var(--accent);
+            text-decoration: none;
+        }
+        
+        .subtitle {
+            color: var(--muted);
+            font-size: 14px;
+        }
+        
+        .container {
+            max-width: 1080px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+        
+        .card {
+            background: white;
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            padding: 18px;
+            margin-bottom: 20px;
+        }
+        
+        .card-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 16px;
+            color: var(--ink);
+        }
+        
+        .btn {
+            background-color: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 16px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .btn:hover {
+            opacity: 0.9;
+        }
+        
+        .btn:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .btn-approve {
+            background-color: #15803d;
+        }
+        
+        .btn-reject {
+            background-color: #b91c1c;
+        }
+        
+        .status-badge {
+            color: white;
+            border-radius: 999px;
+            padding: 2px 10px;
+            font-size: 12px;
+            display: inline-block;
+        }
+        
+        .status-running {
+            background-color: #b45309;
+        }
+        
+        .status-awaiting_approval {
+            background-color: #b91c1c;
+        }
+        
+        .status-approved {
+            background-color: #15803d;
+        }
+        
+        .status-rejected,
+        .status-failed {
+            background-color: #6b7280;
+        }
+        
+        .severity-info {
+            background-color: var(--accent);
+            color: white;
+            border-radius: 4px;
+            padding: 2px 6px;
+            font-size: 12px;
+        }
+        
+        .severity-warn {
+            background-color: #b45309;
+            color: white;
+            border-radius: 4px;
+            padding: 2px 6px;
+            font-size: 12px;
+        }
+        
+        .severity-block {
+            background-color: #b91c1c;
+            color: white;
+            border-radius: 4px;
+            padding: 2px 6px;
+            font-size: 12px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        th, td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid var(--line);
+        }
+        
+        th {
+            color: var(--muted);
+            font-weight: normal;
+            font-size: 14px;
+        }
+        
+        tr:last-child td {
+            border-bottom: none;
+        }
+        
+        textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            resize: vertical;
+        }
+        
+        .error-message {
+            color: #b91c1c;
+            margin-top: 8px;
+            font-size: 14px;
+        }
+        
+        .success-message {
+            color: #15803d;
+            margin-top: 8px;
+            font-size: 14px;
+        }
+        
+        .warning-banner {
+            background-color: #fef3c7;
+            color: #b45309;
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .stage-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 0;
+        }
+        
+        .stage-icon {
+            margin-right: 10px;
+            font-size: 18px;
+        }
+        
+        .stage-text {
+            color: var(--muted);
+        }
+        
+        .completed .stage-text {
+            color: var(--ink);
+            font-weight: bold;
+        }
+        
+        .preview-frame {
+            width: 100%;
+            height: 520px;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+        }
+        
+        .decision-bar {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid var(--line);
+        }
+        
+        .notes-input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            margin-bottom: 10px;
+        }
+        
+        .block-warning {
+            background-color: #fee2e2;
+            color: #b91c1c;
+            padding: 10px;
+            border-radius: 6px;
+            margin-top: 10px;
+        }
+        
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: var(--muted);
+            font-size: 14px;
+        }
+        
+        .footer a {
+            color: var(--accent);
+        }
+        
+        .back-link {
+            display: inline-block;
+            margin-bottom: 16px;
+            color: var(--accent);
+            text-decoration: none;
+        }
+        
+        .back-link:hover {
+            text-decoration: underline;
+        }
+        
+        .artifact-list {
+            margin-top: 16px;
+        }
+        
+        .artifact-item {
+            margin-bottom: 8px;
+        }
+        
+        .artifact-btn {
+            background-color: #e5e7eb;
+            color: var(--ink);
+            border: none;
+            border-radius: 4px;
+            padding: 4px 8px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-right: 8px;
+        }
+        
+        .artifact-btn:hover {
+            background-color: #d1d5db;
+        }
+        
+        .tokens-info {
+            margin-top: 16px;
+            color: var(--muted);
+            font-size: 14px;
+        }
+        
+        .empty-state {
+            color: var(--muted);
+            text-align: center;
+            padding: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <a href="#/" class="brand">QuotePilot 🛩️</a>
+        <div class="subtitle">LUQ LABS · email → bilingual quote autopilot · powered by Qwen on Alibaba Cloud</div>
+    </div>
+    
+    <div class="container" id="main-container">
+        <!-- Content will be injected here -->
+    </div>
+    
+    <div class="footer">
+        Backend: Alibaba Cloud Function Compute (ap-southeast-1) · Rates by <a href="https://www.exchangerate-api.com">Exchange Rate API</a>
+    </div>
+
+    <script>
+        // Configuration
+        const API = localStorage.getItem("QP_API") 
+                 || "https://quotepilot-kafogbnbjc.ap-southeast-1.fcapp.run";
+        
+        // Global state
+        let currentRoute = null;
+        let activeTimers = [];
+        
+        // Helper functions
+        function esc(str) {
+            if (typeof str !== 'string') return '';
+            return str
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#x27;');
+        }
+        
+        function formatDate(dateStr) {
+            return new Date(dateStr).toLocaleString('zh-CN');
+        }
+        
+        function formatCurrency(amount, currency) {
+            if (amount === null || amount === undefined) return 'N/A';
+            return `${currency} ${Number(amount).toFixed(2)}`;
+        }
+        
+        function getStatusClass(status) {
+            switch (status) {
+                case 'running': return 'status-running';
+                case 'awaiting_approval': return 'status-awaiting_approval';
+                case 'approved': return 'status-approved';
+                case 'rejected': return 'status-rejected';
+                case 'failed': return 'status-failed';
+                default: return 'status-failed'; // fallback for unknown statuses
+            }
+        }
+        
+        function getSeverityClass(severity) {
+            switch (severity) {
+                case 'info': return 'severity-info';
+                case 'warn': return 'severity-warn';
+                case 'block': return 'severity-block';
+                default: return 'severity-info';
+            }
+        }
+        
+        function clearTimers() {
+            activeTimers.forEach(timer => clearInterval(timer));
+            activeTimers = [];
+        }
+        
+        function fetchWithTimeout(url, options = {}, timeout = 30000) {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), timeout);
+            
+            return fetch(url, { ...options, signal: controller.signal })
+                .then(response => {
+                    clearTimeout(timeoutId);
+                    return response;
+                })
+                .catch(error => {
+                    clearTimeout(timeoutId);
+                    throw error;
+                });
+        }
+        
+        // Router
+        function handleHashChange() {
+            const hash = window.location.hash.substring(1);
+            
+            // Clear previous timers
+            clearTimers();
+            
+            if (hash.startsWith('/s/')) {
+                const sid = hash.substring(3);
+                renderSubmission(sid);
+            } else {
+                renderDashboard();
+            }
+        }
+        
+        // Dashboard view
+        async function renderDashboard() {
+            currentRoute = 'dashboard';
+            const container = document.getElementById('main-container');
+            
+            try {
+                const response = await fetchWithTimeout(`${API}/api/bootstrap`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                
+                const data = await response.json();
+                
+                let inboxCard = `
+                    <div class="card">
+                        <h2 class="card-title">收件箱 Inbox</h2>
+                        <div style="margin-bottom: 16px;">
+                            <label>Sample emails:</label><br>
+                `;
+                
+                for (const sampleName of data.samples) {
+                    inboxCard += `<button class="btn" onclick="loadSample('${esc(sampleName)}')" style="margin-right: 8px; margin-bottom: 8px;">${esc(sampleName)}</button>`;
+                }
+                
+                inboxCard += `
+                        </div>
+                        <textarea id="email-textarea" rows="10" placeholder="Paste email text here or load a sample"></textarea>
+                        <button class="btn" onclick="submitEmail()" style="margin-top: 10px;">启动自动报价 Run Autopilot</button>
+                        <div id="submit-error" class="error-message"></div>
+                    </div>
+                `;
+                
+                let activeCard = `
+                    <div class="card">
+                        <h2 class="card-title">进行中 Active</h2>
+                `;
+                
+                if (data.submissions.length > 0) {
+                    activeCard += `
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>SID</th>
+                                    <th>Company</th>
+                                    <th>Quote #</th>
+                                    <th>Total</th>
+                                    <th>Status</th>
+                                    <th>Created</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                    `;
+                    
+                    for (const sub of data.submissions) {
+                        activeCard += `
+                            <tr>
+                                <td><a href="#/s/${esc(sub.sid)}">${esc(sub.sid)}</a></td>
+                                <td>${esc(sub.company || 'N/A')}</td>
+                                <td>${esc(sub.quote_number || 'N/A')}</td>
+                                <td>${formatCurrency(sub.total_usd, '$')} / ${formatCurrency(sub.total_cny, '¥')}</td>
+                                <td><span class="status-badge ${getStatusClass(sub.status)}">${esc(sub.status)}</span></td>
+                                <td>${formatDate(sub.created_at)}</td>
+                            </tr>
+                        `;
+                    }
+                    
+                    activeCard += `
+                            </tbody>
+                        </table>
+                    `;
+                } else {
+                    activeCard += '<div class="empty-state">No active submissions</div>';
+                }
+                
+                activeCard += '</div>';
+                
+                let archiveCard = `
+                    <div class="card">
+                        <h2 class="card-title">历史运行 Archive</h2>
+                `;
+                
+                if (data.archived.length > 0) {
+                    archiveCard += `
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Run ID</th>
+                                    <th>Quote #</th>
+                                    <th>Company</th>
+                                    <th>Total</th>
+                                    <th>Decision</th>
+                                    <th>Time</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                    `;
+                    
+                    for (const run of data.archived) {
+                        const hasHtml = run.artifacts.some(a => a.kind === 'quote_html');
+                        const quoteAction = hasHtml 
+                            ? `<button class="btn" onclick="fetchAndOpenArtifact('${esc(run.run_id)}', '${esc(run.quote_number)}.html')">报价单 Quote</button>`
+                            : 'N/A';
+                        
+                        archiveCard += `
+                            <tr>
+                                <td>${esc(run.run_id)}</td>
+                                <td>${esc(run.quote_number || 'N/A')}</td>
+                                <td>${esc(run.company || 'N/A')}</td>
+                                <td>${formatCurrency(run.total_usd, '$')} / ${formatCurrency(run.total_cny, '¥')}</td>
+                                <td><span class="status-badge ${getStatusClass(run.decision || 'N/A')}">${esc(run.decision || 'N/A')}</span></td>
+                                <td>${formatDate(run.created_at)}</td>
+                                <td>${quoteAction}</td>
+                            </tr>
+                        `;
+                    }
+                    
+                    archiveCard += `
+                            </tbody>
+                        </table>
+                    `;
+                } else {
+                    archiveCard += '<div class="empty-state">No archived runs</div>';
+                }
+                
+                archiveCard += '</div>';
+                
+                container.innerHTML = inboxCard + activeCard + archiveCard;
+                
+                // Start polling for active submissions
+                const pollTimer = setInterval(async () => {
+                    if (currentRoute !== 'dashboard') return;
+                    
+                    try {
+                        const response = await fetchWithTimeout(`${API}/api/bootstrap`);
+                        if (!response.ok) return;
+                        
+                        const newData = await response.json();
+                        const activeSubs = newData.submissions.filter(s => s.status === 'running' || s.status === 'awaiting_approval');
+                        
+                        if (activeSubs.length > 0) {
+                            // Re-render the active section
+                            let activeSection = `
+                                <div class="card">
+                                    <h2 class="card-title">进行中 Active</h2>
+                                    <table>
+                                        <thead>
+                                            <tr>
+                                                <th>SID</th>
+                                                <th>Company</th>
+                                                <th>Quote #</th>
+                                                <th>Total</th>
+                                                <th>Status</th>
+                                                <th>Created</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                            `;
+                            
+                            for (const sub of activeSubs) {
+                                activeSection += `
+                                    <tr>
+                                        <td><a href="#/s/${esc(sub.sid)}">${esc(sub.sid)}</a></td>
+                                        <td>${esc(sub.company || 'N/A')}</td>
+                                        <td>${esc(sub.quote_number || 'N/A')}</td>
+                                        <td>${formatCurrency(sub.total_usd, '$')} / ${formatCurrency(sub.total_cny, '¥')}</td>
+                                        <td><span class="status-badge ${getStatusClass(sub.status)}">${esc(sub.status)}</span></td>
+                                        <td>${formatDate(sub.created_at)}</td>
+                                    </tr>
+                                `;
+                            }
+                            
+                            activeSection += `
+                                        </tbody>
+                                    </table>
+                                </div>
+                            `;
+                            
+                            const activeCardElement = container.querySelector('.card:nth-child(2)');
+                            if (activeCardElement) {
+                                activeCardElement.outerHTML = activeSection;
+                            }
+                        }
+                    } catch (err) {
+                        console.error('Polling error:', err);
+                    }
+                }, 5000);
+                
+                activeTimers.push(pollTimer);
+                
+            } catch (error) {
+                container.innerHTML = `
+                    <div class="warning-banner">
+                        <span>API 连接失败,请稍后重试 (cold start may take ~5s)</span>
+                        <button class="btn" onclick="renderDashboard()">重试 Retry</button>
+                    </div>
+                `;
+            }
+        }
+        
+        // Submission view
+        async function renderSubmission(sid) {
+            currentRoute = 'submission';
+            const container = document.getElementById('main-container');
+            
+            try {
+                const response = await fetchWithTimeout(`${API}/api/s/${sid}`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                
+                const data = await response.json();
+                const s = data.s;
+                
+                // Stage checklist
+                const stages = ['intake', 'fx', 'pricing', 'risk_rules', 'risk_llm_sweep', 'drafting'];
+                const stageNames = {
+                    'intake': '解析询价',
+                    'fx': '实时汇率',
+                    'pricing': '目录定价',
+                    'risk_rules': '规则风控',
+                    'risk_llm_sweep': 'AI 风控扫描',
+                    'drafting': '双语起草'
+                };
+                
+                let stageList = '<div class="card"><h2 class="card-title">处理阶段 Processing Stages</h2>';
+                
+                for (const stage of stages) {
+                    const completed = s.stages && s.stages.includes(stage);
+                    const icon = completed ? '✅' : '⏳';
+                    stageList += `<div class="stage-item ${completed ? 'completed' : ''}"><span class="stage-icon">${icon}</span><span class="stage-text">${esc(stageNames[stage] || stage)}</span></div>`;
+                }
+                
+                stageList += '</div>';
+                
+                let content = '';
+                
+                if (s.status === 'running') {
+                    content = `
+                        <div class="card">
+                            <h2 class="card-title">自动驾驶运行中… Autopilot running…</h2>
+                            <p>系统正在处理您的请求，请稍候...</p>
+                        </div>
+                    `;
+                    
+                    // Poll for state updates
+                    const pollTimer = setInterval(async () => {
+                        if (currentRoute !== 'submission') return;
+                        
+                        try {
+                            const stateResponse = await fetchWithTimeout(`${API}/s/${sid}/state`);
+                            if (!stateResponse.ok) return;
+                            
+                            const stateData = await stateResponse.json();
+                            
+                            // Update stage checklist based on new stages
+                            const updatedStageList = '<div class="card"><h2 class="card-title">处理阶段 Processing Stages</h2>' +
+                                stages.map(stage => {
+                                    const completed = stateData.stages.includes(stage);
+                                    const icon = completed ? '✅' : '⏳';
+                                    return `<div class="stage-item ${completed ? 'completed' : ''}"><span class="stage-icon">${icon}</span><span class="stage-text">${esc(stageNames[stage] || stage)}</span></div>`;
+                                }).join('') +
+                                '</div>';
+                            
+                            const stageCard = document.querySelector('.card:first-child');
+                            if (stageCard) {
+                                stageCard.outerHTML = updatedStageList;
+                            }
+                            
+                            // If status changed, reload the full view
+                            if (stateData.status !== s.status) {
+                                clearInterval(pollTimer);
+                                renderSubmission(sid);
+                            }
+                        } catch (err) {
+                            console.error('Polling error:', err);
+                        }
+                    }, 1500);
+                    
+                    activeTimers.push(pollTimer);
+                    
+                } else if (s.status === 'awaiting_approval') {
+                    let riskFlags = '';
+                    if (s.risk_flags && s.risk_flags.length > 0) {
+                        riskFlags = '<div class="card"><h2 class="card-title">风险标记 Risk Flags</h2>';
+                        for (const flag of s.risk_flags) {
+                            riskFlags += `
+                                <div style="margin-bottom: 10px;">
+                                    <span class="${getSeverityClass(flag.severity)}">${esc(flag.code)}</span>
+                                    <span style="margin-left: 8px;">${esc(flag.message_zh)}</span>
+                                    <small style="display: block; color: var(--muted);">${esc(flag.message_en)}</small>
+                                </div>
+                            `;
+                        }
+                        riskFlags += '</div>';
+                    }
+                    
+                    let summary = '';
+                    if (data.summary) {
+                        summary = `<div class="card"><h2 class="card-title">摘要 Summary</h2><pre>${esc(data.summary)}</pre></div>`;
+                    }
+                    
+                    let preview = '';
+                    try {
+                        const previewResponse = await fetchWithTimeout(`${API}/s/${sid}/preview`);
+                        if (previewResponse.ok) {
+                            const previewHtml = await previewResponse.text();
+                            preview = `<div class="card"><h2 class="card-title">报价预览 Quote Preview</h2><iframe class="preview-frame" srcdoc="${esc(previewHtml)}"></iframe></div>`;
+                        }
+                    } catch (err) {
+                        console.error('Preview fetch error:', err);
+                    }
+                    
+                    let blockWarning = '';
+                    let approveDisabled = false;
+                    if (s.risk_flags && s.risk_flags.some(f => f.severity === 'block')) {
+                        blockWarning = '<div class="block-warning">⛔ 存在阻断级风险,不可批准 Blocking flag — approval disabled</div>';
+                        approveDisabled = true;
+                    }
+                    
+                    content = `
+                        ${riskFlags}
+                        ${summary}
+                        ${preview}
+                        <div class="card decision-bar">
+                            <h2 class="card-title">决策 Decision</h2>
+                            <textarea id="decision-notes" class="notes-input" rows="3" placeholder="审批备注 Notes"></textarea>
+                            <button class="btn btn-approve" ${approveDisabled ? 'disabled' : ''} onclick="makeDecision('${esc(sid)}', 'approve')">批准并生成 Approve & Render</button>
+                            <button class="btn btn-reject" onclick="makeDecision('${esc(sid)}', 'reject')">拒绝 Reject</button>
+                            <div id="decision-error" class="error-message"></div>
+                            ${blockWarning}
+                        </div>
+                    `;
+                    
+                } else if (s.status === 'approved' || s.status === 'rejected') {
+                    let artifacts = '';
+                    if (s.artifacts && s.artifacts.length > 0) {
+                        artifacts = '<div class="artifact-list"><h3>交付物 Artifacts</h3>';
+                        for (const artifact of s.artifacts) {
+                            let label = artifact.kind;
+                            switch (artifact.kind) {
+                                case 'quote_html':
+                                    label = '报价单 Quote HTML';
+                                    break;
+                                case 'reply_email':
+                                    label = '回复邮件 Reply Email';
+                                    break;
+                                case 'quote_json':
+                                    label = 'Quote JSON';
+                                    break;
+                                case 'inquiry':
+                                    label = 'Inquiry JSON';
+                                    break;
+                                case 'summary':
+                                    label = 'Summary';
+                                    break;
+                            }
+                            artifacts += `<button class="artifact-btn" onclick="fetchAndOpenArtifact('${esc(artifact.run_id)}', '${esc(artifact.filename)}')">${esc(label)}</button>`;
+                        }
+                        artifacts += '</div>';
+                    }
+                    
+                    content = `
+                        <div class="card">
+                            <h2 class="card-title">结果 Result</h2>
+                            <p>状态 Status: <span class="status-badge ${getStatusClass(s.status)}">${esc(s.status)}</span></p>
+                            ${artifacts}
+                            ${s.tokens ? `<div class="tokens-info">本次运行消耗 ${s.tokens} tokens</div>` : ''}
+                        </div>
+                    `;
+                    
+                } else if (s.status === 'failed') {
+                    content = `
+                        <div class="card">
+                            <h2 class="card-title">错误 Error</h2>
+                            <div style="background-color: #fee2e2; padding: 16px; border-radius: 6px; color: #b91c1c;">
+                                ${esc(s.error)}
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                container.innerHTML = `
+                    <a href="#/" class="back-link">← 返回 Dashboard</a>
+                    ${stageList}
+                    ${content}
+                `;
+                
+            } catch (error) {
+                container.innerHTML = `
+                    <a href="#/" class="back-link">← 返回 Dashboard</a>
+                    <div class="warning-banner">
+                        <span>API 连接失败,请稍后重试 (cold start may take ~5s)</span>
+                        <button class="btn" onclick="renderSubmission('${esc(sid)}')">重试 Retry</button>
+                    </div>
+                `;
+            }
+        }
+        
+        // Event handlers
+        async function loadSample(name) {
+            try {
+                const response = await fetchWithTimeout(`${API}/sample/${encodeURIComponent(name)}`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                
+                const data = await response.json();
+                document.getElementById('email-textarea').value = data.text;
+            } catch (error) {
+                console.error('Error loading sample:', error);
+                document.getElementById('submit-error').textContent = 'Failed to load sample';
+            }
+        }
+        
+        async function submitEmail() {
+            const textarea = document.getElementById('email-textarea');
+            const errorDiv = document.getElementById('submit-error');
+            
+            if (!textarea.value.trim()) {
+                errorDiv.textContent = 'Please enter email text';
+                return;
+            }
+            
+            try {
+                const response = await fetchWithTimeout(`${API}/api/submit`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ email_text: textarea.value })
+                });
+                
+                if (response.status === 422) {
+                    errorDiv.textContent = 'Email text too short';
+                    return;
+                }
+                
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                
+                const data = await response.json();
+                window.location.hash = `#/s/${data.sid}`;
+            } catch (error) {
+                console.error('Submit error:', error);
+                errorDiv.textContent = 'Failed to submit email';
+            }
+        }
+        
+        async function makeDecision(sid, action) {
+            const notesInput = document.getElementById('decision-notes');
+            const errorDiv = document.getElementById('decision-error');
+            
+            try {
+                const response = await fetchWithTimeout(`${API}/api/s/${sid}/decision`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        action: action,
+                        notes: notesInput.value.trim() || null
+                    })
+                });
+                
+                if (response.status === 409) {
+                    errorDiv.textContent = 'Conflict - already decided';
+                    return;
+                }
+                
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                
+                // Reload the submission view
+                renderSubmission(sid);
+            } catch (error) {
+                console.error('Decision error:', error);
+                errorDiv.textContent = 'Failed to make decision';
+            }
+        }
+        
+        async function fetchAndOpenArtifact(runId, filename) {
+            try {
+                const response = await fetchWithTimeout(`${API}/artifacts/${encodeURIComponent(runId)}/${encodeURIComponent(filename)}`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                window.open(url, '_blank');
+                
+                // Clean up the URL after some time
+                setTimeout(() => URL.revokeObjectURL(url), 10000);
+            } catch (error) {
+                console.error('Artifact fetch error:', error);
+                alert('Failed to fetch artifact');
+            }
+        }
+        
+        // Initialize
+        window.addEventListener('hashchange', handleHashChange);
+        handleHashChange(); // Initial render
+    </script>
+</body>
+</html>
+
+```
+
+## Output
+One file: `docs/index.html`, complete.

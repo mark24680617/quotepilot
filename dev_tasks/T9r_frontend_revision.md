@@ -1,3 +1,49 @@
+# Task T9-revision: fix review findings in docs/index.html
+
+Your previous submission (complete file below) was reviewed and REJECTED.
+Re-emit the COMPLETE corrected file. All T9 requirements still apply.
+
+## Findings (fix ALL)
+
+1. **BLOCKER — volume discount field name.** Backend model is
+   `{min_qty, pct}`; you used `{min_qty, discount_pct}` in parseDiscounts /
+   serializeDiscounts (lines ~476-483). Saving discounts 422s and existing
+   discounts render as "50:undefined". Use `pct` everywhere.
+2. **BLOCKER — description preservation.** You "preserve"
+   description_en/description_zh by row index against the profile loaded at
+   render time (lines ~833-840). AI-imported descriptions are discarded and
+   row deletion shifts descriptions onto wrong SKUs. Fix per spec: store the
+   descriptions ON the row (hidden inputs or data-* attributes populated when
+   the row is created — from the loaded profile OR the import draft) and read
+   them back per-row on save. New manual rows get "".
+3. **XSS in value attributes.** rules.quote_prefix, rules.wire_threshold_usd,
+   rules.max_extra_discount_pct, and catalog unit_price_usd are interpolated
+   into `value="…"` without esc() (lines ~611, 617, 621, 641, 726). Wrap ALL
+   of them (esc() already escapes quotes).
+4. **Async retry stomps navigation.** The bootstrap retry loop (and the
+   settings loader) continue after awaits without re-checking the route. Give
+   each render invocation a token (`const myToken = ++navToken` module
+   counter; increment in handleHashChange) and after every await bail out if
+   `myToken !== navToken`. Apply to renderDashboard retries, renderSettings
+   load, and the import handler's slow await.
+5. **Stage checklist never live-updates (pre-existing).**
+   `document.querySelector('.card:first-child')` matches nothing (first child
+   of the container is the back-link). The stage rows already get ids like
+   `stage-intake`? If not, give each stage row `id="stage-{name}"` and in the
+   poll handler update via `document.getElementById('stage-'+name)` — add
+   class `completed` and swap the icon to ✅. Never rebuild the whole card.
+6. **Import timeout too short.** Pass a 90_000ms timeout to fetchWithTimeout
+   for POST /api/profile/import only.
+7. **Retry schedule.** Spec: 3 retries with 2s/5s/10s backoff = up to 4
+   attempts total. Your delays array's 10000 entry is dead. Fix the loop.
+8. **NaN on empty numeric inputs.** Empty 单价/数字 fields become NaN → null →
+   422 on save. On save: default empty/NaN unit_price_usd to "0.00", validity
+   days to 30, urgent days to 7, thresholds to "50000"/"15"; never send NaN.
+   Show an inline note listing fields that were defaulted.
+
+## Current file to fix
+
+```html
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -407,7 +453,6 @@
         // Global state
         let currentRoute = null;
         let activeTimers = [];
-        let navToken = 0;
         
         // Helper functions
         function esc(str) {
@@ -474,14 +519,14 @@
             if (!discountStr || discountStr.trim() === '') return [];
             return discountStr.split(',').map(item => {
                 const [qty, pct] = item.split(':').map(Number);
-                return { min_qty: qty, pct: pct };
-            }).filter(d => !isNaN(d.min_qty) && !isNaN(d.pct));
+                return { min_qty: qty, discount_pct: pct };
+            }).filter(d => !isNaN(d.min_qty) && !isNaN(d.discount_pct));
         }
         
         // Serialize discounts array to string like "50:8, 100:12"
         function serializeDiscounts(discounts) {
             if (!Array.isArray(discounts) || discounts.length === 0) return '';
-            return discounts.map(d => `${d.min_qty}:${d.pct}`).join(', ');
+            return discounts.map(d => `${d.min_qty}:${d.discount_pct}`).join(', ');
         }
         
         // Router
@@ -490,9 +535,6 @@
             
             // Clear previous timers
             clearTimers();
-            
-            // Increment navigation token
-            navToken++;
             
             if (hash.startsWith('/s/')) {
                 const sid = hash.substring(3);
@@ -506,7 +548,6 @@
         
         // Settings view
         async function renderSettings() {
-            const myToken = ++navToken;
             currentRoute = 'settings';
             const container = document.getElementById('main-container');
             
@@ -520,8 +561,6 @@
             try {
                 const response = await fetchWithTimeout(`${API}/api/profile`);
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                
-                if (myToken !== navToken) return;
                 
                 const profile = await response.json();
                 
@@ -615,17 +654,17 @@
                             </div>
                             <div>
                                 <label>电汇阈值 (USD)</label>
-                                <input type="text" id="wire-threshold" value="${esc(profile.rules.wire_threshold_usd || '5000')}">
+                                <input type="text" id="wire-threshold" value="${profile.rules.wire_threshold_usd || '5000'}">
                             </div>
                         </div>
                         <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 16px;">
                             <div>
                                 <label>最大额外折扣 (%)</label>
-                                <input type="text" id="max-discount" value="${esc(profile.rules.max_extra_discount_pct || '10')}">
+                                <input type="text" id="max-discount" value="${profile.rules.max_extra_discount_pct || '10'}">
                             </div>
                             <div>
                                 <label>报价前缀</label>
-                                <input type="text" id="quote-prefix" value="${esc(profile.rules.quote_prefix || 'QP-')}">
+                                <input type="text" id="quote-prefix" value="${profile.rules.quote_prefix || 'QP-'}">
                             </div>
                         </div>
                         <small style="color: var(--muted); display: block; margin-top: 10px;">法律条款不会被 AI 导入覆盖 Legal terms are never AI-overwritten.</small>
@@ -645,10 +684,8 @@
                                 <td><input type="text" value="${esc(item.name_zh)}" data-field="name_zh" data-index="${i}"></td>
                                 <td><input type="text" value="${esc(item.unit)}" data-field="unit" data-index="${i}"></td>
                                 <td><input type="text" value="${esc(item.unit_zh)}" data-field="unit_zh" data-index="${i}"></td>
-                                <td><input type="text" value="${esc(item.unit_price_usd)}" data-field="unit_price_usd" data-index="${i}"></td>
+                                <td><input type="text" value="${item.unit_price_usd}" data-field="unit_price_usd" data-index="${i}"></td>
                                 <td><input type="text" value="${esc(discountsStr)}" data-field="discounts" data-index="${i}"></td>
-                                <td><input type="hidden" value="${esc(item.description_en || '')}" data-field="description_en" data-index="${i}"></td>
-                                <td><input type="hidden" value="${esc(item.description_zh || '')}" data-field="description_zh" data-index="${i}"></td>
                                 <td><button class="delete-btn" data-index="${i}">删除</button></td>
                             </tr>
                         `;
@@ -668,8 +705,6 @@
                                     <th>单位 (ZH)</th>
                                     <th>单价 (USD)</th>
                                     <th>折扣</th>
-                                    <th style="display:none;">Description EN</th>
-                                    <th style="display:none;">Description ZH</th>
                                     <th>操作</th>
                                 </tr>
                             </thead>
@@ -701,7 +736,7 @@
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ url: url })
-                        }, 90000); // 90 second timeout for import
+                        });
                         
                         if (!response.ok) {
                             const errorText = await response.text();
@@ -734,10 +769,8 @@
                                     <td><input type="text" value="${esc(item.name_zh)}" data-field="name_zh" data-index="${i}"></td>
                                     <td><input type="text" value="${esc(item.unit)}" data-field="unit" data-index="${i}"></td>
                                     <td><input type="text" value="${esc(item.unit_zh)}" data-field="unit_zh" data-index="${i}"></td>
-                                    <td><input type="text" value="${esc(item.unit_price_usd)}" data-field="unit_price_usd" data-index="${i}"></td>
+                                    <td><input type="text" value="${item.unit_price_usd}" data-field="unit_price_usd" data-index="${i}"></td>
                                     <td><input type="text" value="${esc(discountsStr)}" data-field="discounts" data-index="${i}"></td>
-                                    <td><input type="hidden" value="${esc(item.description_en || '')}" data-field="description_en" data-index="${i}"></td>
-                                    <td><input type="hidden" value="${esc(item.description_zh || '')}" data-field="description_zh" data-index="${i}"></td>
                                     <td><button class="delete-btn" data-index="${i}">删除</button></td>
                                 `;
                                 tbody.appendChild(newRow);
@@ -770,8 +803,6 @@
                         <td><input type="text" data-field="unit_zh" data-index="${index}"></td>
                         <td><input type="text" data-field="unit_price_usd" data-index="${index}"></td>
                         <td><input type="text" data-field="discounts" data-index="${index}"></td>
-                        <td><input type="hidden" value="" data-field="description_en" data-index="${index}"></td>
-                        <td><input type="hidden" value="" data-field="description_zh" data-index="${index}"></td>
                         <td><button class="delete-btn" data-index="${index}">删除</button></td>
                     `;
                     tbody.appendChild(newRow);
@@ -822,8 +853,8 @@
                             tax_note_zh: document.getElementById('tax-zh').value
                         },
                         rules: {
-                            quote_validity_days: parseInt(document.getElementById('validity-days').value) || 30,
-                            urgent_deadline_days: parseInt(document.getElementById('urgent-days').value) || 7,
+                            quote_validity_days: parseInt(document.getElementById('validity-days').value),
+                            urgent_deadline_days: parseInt(document.getElementById('urgent-days').value),
                             wire_threshold_usd: document.getElementById('wire-threshold').value,
                             max_extra_discount_pct: document.getElementById('max-discount').value,
                             quote_prefix: document.getElementById('quote-prefix').value
@@ -833,25 +864,26 @@
                     
                     // Get catalog items
                     const rows = document.querySelectorAll('#catalog-tbody tr');
-                    let defaultedFields = [];
                     for (let i = 0; i < rows.length; i++) {
                         const inputs = rows[i].querySelectorAll('input');
-                        let unitPriceValue = inputs[5].value;
-                        if (unitPriceValue === '' || isNaN(parseFloat(unitPriceValue))) {
-                            unitPriceValue = '0.00';
-                            defaultedFields.push(`行 ${i+1} 单价`);
-                        }
                         const item = {
                             sku: inputs[0].value,
                             name_en: inputs[1].value,
                             name_zh: inputs[2].value,
                             unit: inputs[3].value,
                             unit_zh: inputs[4].value,
-                            unit_price_usd: parseFloat(unitPriceValue),
-                            volume_discounts: parseDiscounts(inputs[6].value),
-                            description_en: inputs[7].value,
-                            description_zh: inputs[8].value
+                            unit_price_usd: parseFloat(inputs[5].value),
+                            volume_discounts: parseDiscounts(inputs[6].value)
                         };
+                        
+                        // Preserve description fields if they exist in original data
+                        if (profile.catalog && profile.catalog[i]) {
+                            item.description_en = profile.catalog[i].description_en || '';
+                            item.description_zh = profile.catalog[i].description_zh || '';
+                        } else {
+                            item.description_en = '';
+                            item.description_zh = '';
+                        }
                         
                         profileToSave.catalog.push(item);
                     }
@@ -869,18 +901,13 @@
                             return;
                         }
                         
-                        let successMessage = '<div class="success-message">已保存 Saved ✓</div>';
-                        if (defaultedFields.length > 0) {
-                            successMessage += `<div class="warning-banner">注意:以下字段为空或无效,已设为默认值: ${defaultedFields.join(', ')}</div>`;
-                        }
-                        document.getElementById('import-status').innerHTML = successMessage;
+                        document.getElementById('import-status').innerHTML = '<div class="success-message">已保存 Saved ✓</div>';
                     } catch (error) {
                         document.getElementById('import-status').innerHTML = `<div class="error-message">保存失败: ${esc(error.message)}</div>`;
                     }
                 });
                 
             } catch (error) {
-                if (myToken !== navToken) return;
                 container.innerHTML = `
                     <div class="warning-banner">
                         <span>API 连接失败,请稍后重试 (cold start may take ~5s)</span>
@@ -905,7 +932,6 @@
         
         // Dashboard view
         async function renderDashboard() {
-            const myToken = ++navToken;
             currentRoute = 'dashboard';
             const container = document.getElementById('main-container');
             
@@ -916,29 +942,27 @@
                 </div>
             `;
             
-            // Try up to 4 times with backoff (3 retries): 2s, 5s, 10s
+            // Try up to 3 times with backoff
             const delays = [2000, 5000, 10000];
             let lastError = null;
             
-            for (let i = 0; i <= delays.length; i++) {
+            for (let i = 0; i < delays.length; i++) {
                 try {
                     const response = await fetchWithTimeout(`${API}/api/bootstrap`);
                     if (!response.ok) throw new Error(`HTTP ${response.status}`);
                     
                     const data = await response.json();
-                    if (myToken !== navToken) return;
                     renderDashboardWithData(container, data);
                     return;
                 } catch (error) {
                     lastError = error;
-                    if (i < delays.length) {
+                    if (i < delays.length - 1) {
                         await new Promise(resolve => setTimeout(resolve, delays[i]));
                     }
                 }
             }
             
             // If all retries failed
-            if (myToken !== navToken) return;
             container.innerHTML = `
                 <div class="warning-banner">
                     <span>API 连接失败,请稍后重试 (cold start may take ~5s)</span>
@@ -1128,7 +1152,6 @@
         
         // Submission view
         async function renderSubmission(sid) {
-            const myToken = ++navToken;
             currentRoute = 'submission';
             const container = document.getElementById('main-container');
             
@@ -1150,8 +1173,6 @@
                     throw new Error(`HTTP ${response.status}`);
                 }
                 
-                if (myToken !== navToken) return;
-                
                 const data = await response.json();
                 const s = data.s;
                 
@@ -1171,7 +1192,7 @@
                 for (const stage of stages) {
                     const completed = s.stages && s.stages.includes(stage);
                     const icon = completed ? '✅' : '⏳';
-                    stageList += `<div class="stage-item ${completed ? 'completed' : ''}" id="stage-${esc(stage)}"><span class="stage-icon">${icon}</span><span class="stage-text">${esc(stageNames[stage] || stage)}</span></div>`;
+                    stageList += `<div class="stage-item ${completed ? 'completed' : ''}"><span class="stage-icon">${icon}</span><span class="stage-text">${esc(stageNames[stage] || stage)}</span></div>`;
                 }
                 
                 stageList += '</div>';
@@ -1212,18 +1233,17 @@
                             }
                             
                             // Update stage checklist based on new stages
-                            for (const stage of stages) {
-                                const completed = stateData.stages.includes(stage);
-                                const stageElement = document.getElementById(`stage-${esc(stage)}`);
-                                if (stageElement) {
-                                    stageElement.classList.toggle('completed', completed);
-                                    const iconSpan = stageElement.querySelector('.stage-icon');
-                                    const textSpan = stageElement.querySelector('.stage-text');
-                                    if (iconSpan && textSpan) {
-                                        iconSpan.textContent = completed ? '✅' : '⏳';
-                                        textSpan.textContent = stageNames[stage] || stage;
-                                    }
-                                }
+                            const updatedStageList = '<div class="card"><h2 class="card-title">处理阶段 Processing Stages</h2>' +
+                                stages.map(stage => {
+                                    const completed = stateData.stages.includes(stage);
+                                    const icon = completed ? '✅' : '⏳';
+                                    return `<div class="stage-item ${completed ? 'completed' : ''}"><span class="stage-icon">${icon}</span><span class="stage-text">${esc(stageNames[stage] || stage)}</span></div>`;
+                                }).join('') +
+                                '</div>';
+                            
+                            const stageCard = document.querySelector('.card:first-child');
+                            if (stageCard) {
+                                stageCard.outerHTML = updatedStageList;
                             }
                             
                             // If status changed, reload the full view
@@ -1377,7 +1397,6 @@
                 `;
                 
             } catch (error) {
-                if (myToken !== navToken) return;
                 container.innerHTML = `
                     <a href="#/" class="back-link">← 返回 Dashboard</a>
                     <div class="warning-banner">
@@ -1489,3 +1508,8 @@
     </script>
 </body>
 </html>
+
+```
+
+## Output
+One file: `docs/index.html`, complete.

@@ -53,6 +53,16 @@ class Inquiry(BaseModel):
     summary: str = Field(description="One-sentence English summary of the inquiry")
 
 
+class SellerInfo(BaseModel):
+    name_en: str
+    name_zh: str
+    jurisdiction_en: str = ""
+    jurisdiction_zh: str = ""
+    website: str = ""
+    email: str = ""
+    description: str = Field(default="", description="One paragraph about the company")
+
+
 class VolumeDiscount(BaseModel):
     min_qty: Decimal
     pct: Decimal
@@ -121,6 +131,7 @@ class Customer(BaseModel):
 
 class QuoteDraft(BaseModel):
     quote_number: str
+    seller: SellerInfo
     issue_date: date
     valid_until: date
     customer: Customer

@@ -34,11 +34,13 @@ resources:
       memorySize: 512
       diskSize: 512
       timeout: 300
-      instanceConcurrency: 10
+      # high concurrency keeps demo traffic on ONE instance (in-memory state)
+      instanceConcurrency: 50
       environmentVariables:
         QWEN_API_KEY: ${env(QWEN_API_KEY)}
         QWEN_BASE_URL: https://dashscope-intl.aliyuncs.com/compatible-mode/v1
         QP_RUNS_DIR: /tmp/runs
+        QP_PROFILE_STORE: /tmp/profile.json
         PYTHONPATH: /code/vendor:/code/src
       code: ./
       triggers:

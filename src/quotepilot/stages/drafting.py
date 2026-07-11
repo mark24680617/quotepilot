@@ -9,11 +9,12 @@ from __future__ import annotations
 import json
 
 from .. import config, llm
+from ..profile import CompanyProfile
 from ..models import CoverLetters, Inquiry, PricedLine, RiskFlag
 
 _SYSTEM = """You draft the personalized text of a formal B2B price quote for
-LUQ LABS L.L.C., a California software company selling to Chinese enterprise
-customers. Write BOTH English and Simplified Chinese versions.
+{seller_name} ({seller_jurisdiction}), selling cross-border to Chinese
+enterprise customers. Write BOTH English and Simplified Chinese versions.
 
 Style: professional, warm, concise. The Chinese version must read like native
 business Chinese (商务中文), not a translation. Do NOT quote any prices or
@@ -34,6 +35,7 @@ def draft_cover(
     inquiry: Inquiry,
     lines: list[PricedLine],
     flags: list[RiskFlag],
+    profile: CompanyProfile,
     usage: llm.UsageTracker | None = None,
 ) -> CoverLetters:
     facts = {
@@ -49,15 +51,19 @@ def draft_cover(
         "customer_questions": inquiry.questions,
         "risk_context": [f.message_en for f in flags if f.severity != "info"],
         "fixed_facts": {
-            "payment": config.TERMS["payment_en"],
-            "tax": config.TERMS["tax_note_en"],
-            "legal": config.TERMS["legal_en"],
-            "validity_days": config.QUOTE_VALIDITY_DAYS,
+            "payment": profile.terms.payment_en,
+            "tax": profile.terms.tax_note_en,
+            "legal": profile.terms.legal_en,
+            "validity_days": profile.rules.quote_validity_days,
         },
     }
+    system = _SYSTEM.format(
+        seller_name=profile.seller.name_en,
+        seller_jurisdiction=profile.seller.jurisdiction_en or "a company",
+    )
     cover = llm.structured(
         config.PLANNER_MODEL,
-        _SYSTEM,
+        system,
         "Facts:\n" + json.dumps(facts, ensure_ascii=False, indent=1),
         CoverLetters,
         usage=usage,

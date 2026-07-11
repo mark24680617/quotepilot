@@ -15,14 +15,14 @@ _env = Environment(
 
 def render_quote_html(quote: QuoteDraft) -> str:
     template = _env.get_template("quote.html.j2")
-    return template.render(q=quote, seller=config.SELLER)
+    return template.render(q=quote, seller=quote.seller)
 
 
 def render_reply_email(quote: QuoteDraft) -> str:
     """Bilingual reply email draft in Markdown (body only)."""
     c = quote.cover
     parts = [
-        f"Subject / 主题: Quotation {quote.quote_number} — {config.SELLER['name_en']}",
+        f"Subject / 主题: Quotation {quote.quote_number} — {quote.seller.name_en}",
         "",
         "----- 中文 -----",
         "",
@@ -48,6 +48,6 @@ def render_reply_email(quote: QuoteDraft) -> str:
         f"Total: USD {quote.total_usd:,} (≈ CNY {quote.total_cny:,} at {quote.fx.rate}"
         f"{', indicative' if quote.fx.offline else ''}).",
         "",
-        f"{config.SELLER['name_en']} · {config.SELLER['website']} · {config.SELLER['email']}",
+        f"{quote.seller.name_en} · {quote.seller.website} · {quote.seller.email}",
     ]
     return "\n".join(parts)

@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from .. import config, llm
 from ..models import Inquiry
+from ..profile import CompanyProfile
 
-_SYSTEM = """You are the intake analyst of a US software company (LUQ LABS) that sells
-AI software products cross-border to Chinese B2B customers. You read inbound
-inquiry emails written in English or Chinese and extract a faithful, structured
-summary.
+_SYSTEM = """You are the intake analyst of {seller_name} ({seller_desc}), which sells
+to business customers cross-border. You read inbound inquiry emails written in
+English or Chinese and extract a faithful, structured summary.
 
 Rules:
 - NEVER invent data. If a quantity, name, or term is not stated, leave it null
@@ -29,10 +29,18 @@ Rules:
 - summary: one English sentence."""
 
 
-def parse_inquiry(raw_email: str, usage: llm.UsageTracker | None = None) -> Inquiry:
+def parse_inquiry(
+    raw_email: str,
+    profile: CompanyProfile,
+    usage: llm.UsageTracker | None = None,
+) -> Inquiry:
+    system = _SYSTEM.format(
+        seller_name=profile.seller.name_en,
+        seller_desc=profile.seller.description or "a B2B seller",
+    )
     return llm.structured(
         config.WORKER_MODEL,
-        _SYSTEM,
+        system,
         f"Inbound email:\n---\n{raw_email}\n---",
         Inquiry,
         usage=usage,

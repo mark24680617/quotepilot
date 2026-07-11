@@ -235,6 +235,10 @@ app.add_middleware(
 
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
+from quotepilot.web.profile_api import router as profile_router  # noqa: E402
+
+app.include_router(profile_router)
+
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):

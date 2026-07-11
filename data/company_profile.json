@@ -1,6 +1,29 @@
 {
-  "currency": "USD",
-  "items": [
+  "seller": {
+    "name_en": "LUQ LABS L.L.C.",
+    "name_zh": "LUQ LABS 有限责任公司",
+    "jurisdiction_en": "a California limited liability company",
+    "jurisdiction_zh": "一家依据美国加利福尼亚州法律设立并存续的有限责任公司",
+    "website": "luqlabs.com",
+    "email": "sales@luqlabs.com",
+    "description": "AI software products for cross-border B2B customers (CitizenReady AI, RentalNote, WealthRank, Ten Thousand Suns)."
+  },
+  "terms": {
+    "payment_en": "Payment in USD via Stripe invoice; international wire transfer available (recommended for orders over USD 50,000).",
+    "payment_zh": "以美元通过 Stripe 账单支付;亦可采用国际电汇(订单金额超过 50,000 美元时建议使用电汇)。",
+    "legal_en": "Any resulting agreement is governed by the laws of the State of California, USA (CISG excluded). Disputes are resolved by arbitration administered by HKIAC, seated in Hong Kong. The Chinese-language version of the executed contract is the sole authoritative text; English text is a courtesy translation.",
+    "legal_zh": "由此产生的任何协议均受美国加利福尼亚州法律管辖(排除《联合国国际货物销售合同公约》适用)。争议提交香港国际仲裁中心(HKIAC)仲裁解决,仲裁地为香港。正式签署的合同以中文文本为唯一正式文本,英文文本仅为参考译文。",
+    "tax_note_en": "LUQ LABS is a US company and cannot issue Chinese VAT fapiao; a US invoice and W-8BEN-E form are provided for cross-border tax filing.",
+    "tax_note_zh": "LUQ LABS 为美国公司,无法开具中国增值税发票;我方将提供美国形式发票及 W-8BEN-E 表格,供贵方办理对外支付税务备案。"
+  },
+  "rules": {
+    "quote_validity_days": 30,
+    "wire_threshold_usd": "50000",
+    "max_extra_discount_pct": "15",
+    "urgent_deadline_days": 7,
+    "quote_prefix": "LUQ"
+  },
+  "catalog": [
     {
       "sku": "CR-ENT",
       "name_en": "CitizenReady AI — Enterprise License",
@@ -11,9 +34,18 @@
       "unit_zh": "席位/年",
       "unit_price_usd": "290.00",
       "volume_discounts": [
-        { "min_qty": 50, "pct": 8 },
-        { "min_qty": 100, "pct": 12 },
-        { "min_qty": 300, "pct": 18 }
+        {
+          "min_qty": 50,
+          "pct": 8
+        },
+        {
+          "min_qty": 100,
+          "pct": 12
+        },
+        {
+          "min_qty": 300,
+          "pct": 18
+        }
       ]
     },
     {
@@ -37,8 +69,14 @@
       "unit_zh": "物业/年",
       "unit_price_usd": "59.00",
       "volume_discounts": [
-        { "min_qty": 100, "pct": 10 },
-        { "min_qty": 500, "pct": 15 }
+        {
+          "min_qty": 100,
+          "pct": 10
+        },
+        {
+          "min_qty": 500,
+          "pct": 15
+        }
       ]
     },
     {
@@ -51,8 +89,14 @@
       "unit_zh": "万次调用",
       "unit_price_usd": "120.00",
       "volume_discounts": [
-        { "min_qty": 100, "pct": 10 },
-        { "min_qty": 500, "pct": 20 }
+        {
+          "min_qty": 100,
+          "pct": 10
+        },
+        {
+          "min_qty": 500,
+          "pct": 20
+        }
       ]
     },
     {
@@ -76,7 +120,10 @@
       "unit_zh": "人天",
       "unit_price_usd": "950.00",
       "volume_discounts": [
-        { "min_qty": 20, "pct": 5 }
+        {
+          "min_qty": 20,
+          "pct": 5
+        }
       ]
     },
     {
