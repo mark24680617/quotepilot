@@ -55,7 +55,7 @@ def draft_cover(
             "validity_days": config.QUOTE_VALIDITY_DAYS,
         },
     }
-    return llm.structured(
+    cover = llm.structured(
         config.PLANNER_MODEL,
         _SYSTEM,
         "Facts:\n" + json.dumps(facts, ensure_ascii=False, indent=1),
@@ -64,3 +64,7 @@ def draft_cover(
         temperature=0.5,
         max_tokens=2500,
     )
+    # Models sometimes double-escape newlines inside JSON strings.
+    for field in ("cover_letter_en", "cover_letter_zh", "answers_en", "answers_zh"):
+        setattr(cover, field, getattr(cover, field).replace("\\n", "\n").strip())
+    return cover
