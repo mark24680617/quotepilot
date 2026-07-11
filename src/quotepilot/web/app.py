@@ -114,7 +114,27 @@ def sub_view(sub: Submission) -> dict[str, Any]:
         for model_usage in sub.result.usage.values():
             total_tokens += model_usage.get('prompt_tokens', 0) + model_usage.get('completion_tokens', 0)
         tokens = total_tokens
-    
+
+    # Editable detail (raw numeric strings for the line-item editor).
+    lines = None
+    customer = None
+    cover = None
+    if quote:
+        lines = [
+            {
+                "sku": l.sku, "name_en": l.name_en, "name_zh": l.name_zh,
+                "unit": l.unit, "unit_zh": l.unit_zh,
+                "quantity": str(l.quantity), "unit_price_usd": str(l.unit_price_usd),
+                "discount_pct": str(l.discount_pct), "line_total_usd": str(l.line_total_usd),
+            }
+            for l in quote.lines
+        ]
+        customer = {"contact_name": quote.customer.contact_name,
+                    "company": quote.customer.company, "email": quote.customer.email}
+        cover = {"cover_letter_en": quote.cover.cover_letter_en,
+                 "cover_letter_zh": quote.cover.cover_letter_zh,
+                 "answers_en": quote.cover.answers_en, "answers_zh": quote.cover.answers_zh}
+
     return {
         "sid": sub.sid,
         "source": sub.source,
@@ -128,7 +148,10 @@ def sub_view(sub: Submission) -> dict[str, Any]:
         "risk_flags": risk_flags,
         "artifacts": artifacts,
         "tokens": tokens,
-        "error": sub.error
+        "error": sub.error,
+        "lines": lines,
+        "customer": customer,
+        "cover": cover,
     }
 
 
@@ -293,6 +316,37 @@ async def api_get_submission(sid: str):
         "s": sub_view(submission),
         "summary": summary
     }
+
+
+class EditRequest(BaseModel):
+    lines: list[dict] | None = None
+    customer: dict | None = None
+    cover: dict | None = None
+    extra_notes_en: list[str] | None = None
+    extra_notes_zh: list[str] | None = None
+
+
+@app.post("/api/s/{sid}/edit")
+async def api_edit_quote(sid: str, request: EditRequest):
+    """Re-price the quote from human line-item edits (Decimal math, server-side)."""
+    from quotepilot import core
+
+    with SUBMISSIONS_LOCK:
+        submission = SUBMISSIONS.get(sid)
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    gate = submission.gate
+    if submission.status != "awaiting_approval" or gate.quote is None:
+        raise HTTPException(status_code=409, detail="Quote is not open for editing")
+
+    edits = {k: v for k, v in request.model_dump().items() if v is not None}
+    try:
+        new_quote = core.reprice_quote(gate.quote, edits)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"Could not reprice: {e}")
+
+    gate.quote = new_quote  # the approval + preview now use the edited quote
+    return {"ok": True, "s": sub_view(submission), "summary": summarize(new_quote)}
 
 
 class DecisionRequest(BaseModel):
