@@ -512,11 +512,12 @@ function runRow(r) {
   </a>`;
 }
 function archRow(r, i) {
-  const sid = r.sid || "";
+  const sid = r.sid || r.run_id || "";
+  const st = r.status || ({ approve: "approved", reject: "rejected", approved: "approved", rejected: "rejected" }[r.decision]) || r.decision;
   return `<a class="row" href="#/s/${encodeURIComponent(sid)}">
     <span class="row-main"><b>${esc(r.company || "—")}</b><span class="row-sub mono">${esc(r.quote_number || sid.slice(0, 10))}</span></span>
-    <span class="row-amt">${r.total_usd != null ? `<b>${fmtUSD(r.total_usd)}</b><span>${fmtCNY(r.total_cny)}</span>` : `<span class="faint">—</span>`}</span>
-    ${pill(r.status)}
+    <span class="row-amt">${r.total_usd != null ? `<b>${fmtUSD(r.total_usd)}</b>${r.total_cny != null ? `<span>${fmtCNY(r.total_cny)}</span>` : ""}` : `<span class="faint">—</span>`}</span>
+    ${pill(st)}
     <button class="btn btn-ghost btn-sm" data-arch="${i}">${esc(L("View quote", "查看报价单"))}</button>
   </a>`;
 }
