@@ -10,3 +10,5 @@
 {"ts": "2026-07-11T03:47:39+00:00", "task": "T9_frontend_settings.md", "model": "qwen3-coder-plus", "calls": 1, "prompt_tokens": 7533, "completion_tokens": 11790, "est_cost_usd": 0.109386, "files": ["docs/index.html"]}
 {"ts": "2026-07-11T03:57:10+00:00", "task": "T9r_frontend_revision.md", "model": "qwen3-coder-plus", "calls": 1, "prompt_tokens": 12654, "completion_tokens": 12227, "est_cost_usd": 0.123124, "files": ["docs/index.html"]}
 {"ts": "2026-07-11T20:35:15+00:00", "task": "T10_editable_quote.md", "model": "qwen3-coder-plus", "calls": 2, "prompt_tokens": 64737, "completion_tokens": 26470, "est_cost_usd": 0.341234, "files": ["docs/index.html"]}
+{"ts": "2026-07-11T22:44:55+00:00", "task": "T11_devpost.md", "model": "qwen-max", "calls": 1, "prompt_tokens": 1135, "completion_tokens": 1152, "est_cost_usd": 0.011477, "files": ["docs/devpost.md"]}
+{"ts": "2026-07-11T22:45:00+00:00", "task": "T12_blog.md", "model": "qwen-max", "calls": 1, "prompt_tokens": 848, "completion_tokens": 1061, "est_cost_usd": 0.010078, "files": ["docs/blog.md"]}
