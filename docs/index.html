@@ -865,8 +865,8 @@ function renderAwaiting(sid, s, summary, ep) {
       <div class="stats">
         <div class="stat"><div class="k">${esc(L("CUSTOMER", "客户"))}</div><div class="v" style="font-size:15px">${esc(s.company || "—")}</div></div>
         <div class="stat"><div class="k">${esc(L("QUOTE №", "报价编号"))}</div><div class="v mono" style="font-size:15px">${esc(s.quote_number || "—")}</div></div>
-        <div class="stat"><div class="k">${esc(L("TOTAL (USD)", "合计 (USD)"))}</div><div class="v">${fmtUSD(s.total_usd)}</div></div>
-        <div class="stat"><div class="k">${esc(L("TOTAL (CNY)", "合计 (CNY)"))}</div><div class="v">${fmtCNY(s.total_cny)}<small>${esc(L("ref.", "参考"))}</small></div></div>
+        <div class="stat"><div class="k">${esc(L("TOTAL (USD)", "合计 (USD)"))}</div><div class="v" id="stTotalUsd">${fmtUSD(s.total_usd)}</div></div>
+        <div class="stat"><div class="k">${esc(L("TOTAL (CNY)", "合计 (CNY)"))}</div><div class="v"><span id="stTotalCny">${fmtCNY(s.total_cny)}</span><small>${esc(L("ref.", "参考"))}</small></div></div>
       </div>
     </section>
 
@@ -878,7 +878,7 @@ function renderAwaiting(sid, s, summary, ep) {
         </section>
         <section class="card card-pad" style="margin-top:18px">
           <h2>${esc(L("Deal summary", "交易摘要"))}</h2>
-          <pre class="summary-pre" style="margin-top:12px">${esc(summary || L("(No summary provided)", "（暂无摘要）"))}</pre>
+          <pre class="summary-pre" id="dealSummary" style="margin-top:12px">${esc(summary || L("(No summary provided)", "（暂无摘要）"))}</pre>
         </section>
         <section class="card card-pad" style="margin-top:18px">
           <h2>${esc(L("Your decision", "您的决定"))}</h2>
@@ -891,8 +891,12 @@ function renderAwaiting(sid, s, summary, ep) {
         </section>
       </div>
       <section class="card card-pad">
-        <h2>${esc(L("Quote preview", "报价单预览"))}</h2>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+          <h2>${esc(L("Quote preview", "报价单预览"))}</h2>
+          <button class="btn btn-ghost btn-sm" id="editToggle">✎ ${esc(L("Edit quote", "编辑报价"))}</button>
+        </div>
         <div class="preview-frame" id="previewHolder" style="margin-top:12px"><div class="preview-load">${esc(L("Rendering preview…", "正在生成预览…"))}</div></div>
+        <div id="editorHolder" hidden style="margin-top:12px"></div>
       </section>
     </div>
   </div>`;
@@ -920,6 +924,149 @@ function renderAwaiting(sid, s, summary, ep) {
   const ab = document.getElementById("approveBtn");
   if (ab) ab.addEventListener("click", () => decide("approve"));
   document.getElementById("rejectBtn").addEventListener("click", () => decide("reject"));
+
+  // ---- editable quote ----
+  let editing = false;
+  const editToggle = document.getElementById("editToggle");
+  if (editToggle) editToggle.addEventListener("click", () => {
+    editing = !editing;
+    const holder = document.getElementById("previewHolder");
+    const editor = document.getElementById("editorHolder");
+    if (editing) {
+      holder.hidden = true; editor.hidden = false;
+      editToggle.textContent = L("← Preview", "← 返回预览");
+      buildQuoteEditor(sid, s, ep);
+    } else {
+      editor.hidden = true; holder.hidden = false;
+      editToggle.textContent = "✎ " + L("Edit quote", "编辑报价");
+    }
+  });
+}
+
+/* ---- editable quote editor ---- */
+let CATALOG_CACHE = null;
+async function getCatalog() {
+  if (CATALOG_CACHE) return CATALOG_CACHE;
+  try { const p = await jfetch("/api/profile"); CATALOG_CACHE = (p && p.catalog) || []; }
+  catch (e) { CATALOG_CACHE = []; }
+  return CATALOG_CACHE;
+}
+function lineRowHTML(l, i) {
+  l = l || {};
+  return `<tr data-line="${i}">
+    <td><input data-f="sku" value="${esc(l.sku || "CUSTOM")}" style="width:88px"></td>
+    <td><input data-f="name_en" value="${esc(l.name_en || "")}" placeholder="Name (EN)">
+        <input data-f="name_zh" value="${esc(l.name_zh || "")}" placeholder="名称 (中)" style="margin-top:4px"></td>
+    <td class="num"><input data-f="quantity" inputmode="decimal" value="${esc(l.quantity != null ? l.quantity : "")}"></td>
+    <td class="num"><input data-f="unit_price_usd" inputmode="decimal" value="${esc(l.unit_price_usd != null ? l.unit_price_usd : "")}"></td>
+    <td class="num"><input data-f="discount_pct" inputmode="decimal" value="${esc(l.discount_pct != null ? l.discount_pct : "0")}" style="width:56px"></td>
+    <td><input data-f="unit" value="${esc(l.unit || "unit")}" style="width:80px">
+        <input data-f="unit_zh" value="${esc(l.unit_zh || "件")}" style="width:80px;margin-top:4px"></td>
+    <td><button class="del-btn" data-del="${i}" title="${esc(L("Remove", "删除"))}">✕</button></td>
+  </tr>`;
+}
+async function buildQuoteEditor(sid, s, ep) {
+  const box = document.getElementById("editorHolder");
+  if (!box) return;
+  const lines = (s.lines || []).map(l => Object.assign({}, l));
+  const cust = s.customer || {};
+  const cov = s.cover || {};
+  const catalog = await getCatalog();
+  if (ep !== EPOCH) return;
+  const catOpts = `<option value="">${esc(L("+ Add from catalog…", "+ 从目录添加…"))}</option>` +
+    catalog.map((c, i) => `<option value="${i}">${esc(c.sku)} · ${esc(c.name_en)}</option>`).join("");
+  box.innerHTML = `
+    <div class="scroll-x">
+      <table class="cat-table"><thead><tr>
+        <th>SKU</th><th>${esc(L("Name", "名称"))}</th><th class="num">${esc(L("Qty", "数量"))}</th>
+        <th class="num">${esc(L("Unit price USD", "单价 USD"))}</th><th class="num">${esc(L("Disc%", "折扣%"))}</th>
+        <th>${esc(L("Unit", "单位"))}</th><th></th>
+      </tr></thead><tbody id="lineBody">${lines.map(lineRowHTML).join("")}</tbody></table>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap;align-items:center">
+      <select id="catAdd" class="fld" style="max-width:260px;border:1px solid var(--line);border-radius:9px;padding:8px 10px">${catOpts}</select>
+      <button class="btn btn-ghost btn-sm" id="addLine">＋ ${esc(L("Add blank line", "添加空行"))}</button>
+    </div>
+    <div class="grid2" style="margin-top:14px">
+      <label class="fld"><span>${esc(L("Contact", "联系人"))}</span><input id="edContact" value="${esc(cust.contact_name || "")}"></label>
+      <label class="fld"><span>${esc(L("Company", "公司"))}</span><input id="edCompany" value="${esc(cust.company || "")}"></label>
+      <label class="fld"><span>${esc(L("Email", "邮箱"))}</span><input id="edEmail" value="${esc(cust.email || "")}"></label>
+    </div>
+    <details style="margin-top:12px"><summary style="cursor:pointer;font-size:13px;color:var(--muted)">${esc(L("Edit cover letter", "编辑信函正文"))}</summary>
+      <div class="grid2" style="margin-top:10px">
+        <label class="fld full"><span>${esc(L("Cover letter (中文)", "信函正文（中文）"))}</span><textarea id="edCovZh" style="min-height:90px">${esc(cov.cover_letter_zh || "")}</textarea></label>
+        <label class="fld full"><span>${esc(L("Cover letter (EN)", "信函正文（英文）"))}</span><textarea id="edCovEn" style="min-height:90px">${esc(cov.cover_letter_en || "")}</textarea></label>
+      </div>
+    </details>
+    <div class="decide" style="margin-top:16px">
+      <button class="btn btn-pri" id="recalcBtn">${esc(L("Recalculate & preview", "重新计算并预览"))}</button>
+      <button class="btn btn-ghost" id="cancelEdit">${esc(L("Cancel", "取消"))}</button>
+    </div>
+    <p class="demo-note" style="margin-top:12px">${esc(L("Totals are recomputed on the server (exact decimal math). Approve issues the edited quote.", "金额由服务器精确重算（Decimal），批准后出具的即为编辑后的报价。"))}</p>`;
+
+  const body = document.getElementById("lineBody");
+  document.getElementById("addLine").addEventListener("click", () => {
+    body.insertAdjacentHTML("beforeend", lineRowHTML({ sku: "CUSTOM", quantity: "1", unit_price_usd: "0", discount_pct: "0" }, body.children.length));
+  });
+  document.getElementById("catAdd").addEventListener("change", e => {
+    const idx = e.target.value; if (idx === "") return;
+    const c = catalog[+idx];
+    body.insertAdjacentHTML("beforeend", lineRowHTML({
+      sku: c.sku, name_en: c.name_en, name_zh: c.name_zh, unit: c.unit, unit_zh: c.unit_zh,
+      quantity: "1", unit_price_usd: c.unit_price_usd, discount_pct: "0"
+    }, body.children.length));
+    e.target.value = "";
+  });
+  body.addEventListener("click", e => {
+    const d = e.target.closest("[data-del]");
+    if (d) d.closest("tr").remove();
+  });
+  document.getElementById("cancelEdit").addEventListener("click", () => {
+    document.getElementById("editToggle").click(); // toggle back to preview
+  });
+  document.getElementById("recalcBtn").addEventListener("click", () => recalcQuote(sid, ep));
+}
+function collectEdits() {
+  const lines = Array.from(document.querySelectorAll("#lineBody tr")).map(tr => {
+    const o = {};
+    tr.querySelectorAll("input[data-f]").forEach(inp => { o[inp.dataset.f] = inp.value.trim(); });
+    return o;
+  });
+  return {
+    lines,
+    customer: {
+      contact_name: (document.getElementById("edContact") || {}).value || "",
+      company: (document.getElementById("edCompany") || {}).value || "",
+      email: (document.getElementById("edEmail") || {}).value || ""
+    },
+    cover: {
+      cover_letter_zh: (document.getElementById("edCovZh") || {}).value || "",
+      cover_letter_en: (document.getElementById("edCovEn") || {}).value || ""
+    }
+  };
+}
+async function recalcQuote(sid, ep) {
+  const btn = document.getElementById("recalcBtn");
+  const orig = btn.textContent;
+  btn.disabled = true; btn.innerHTML = '<span class="spin"></span>' + esc(L("Recalculating…", "重新计算中…"));
+  try {
+    const res = await jfetch(`/api/s/${encodeURIComponent(sid)}/edit`, { method: "POST", body: JSON.stringify(collectEdits()) });
+    if (ep !== EPOCH) return;
+    const s2 = res.s || {};
+    const u = document.getElementById("stTotalUsd"); if (u) u.textContent = fmtUSD(s2.total_usd);
+    const c = document.getElementById("stTotalCny"); if (c) c.textContent = fmtCNY(s2.total_cny);
+    const sum = document.getElementById("dealSummary"); if (sum) sum.textContent = res.summary || sum.textContent;
+    toast(L("Quote updated", "已更新报价"), "ok");
+    document.getElementById("editToggle").click(); // back to preview
+    const holder = document.getElementById("previewHolder");
+    if (holder) holder.innerHTML = `<div class="preview-load">${esc(L("Rendering preview…", "正在生成预览…"))}</div>`;
+    loadPreview(sid, ep);
+  } catch (e) {
+    if (ep !== EPOCH) return;
+    if (e.status === 409) { toast(L("Quote is no longer editable. ", "报价已不可编辑。") + e.message, "warn"); viewRun(sid, ep); return; }
+    toast(L("Recalculate failed: ", "重新计算失败：") + e.message, "bad");
+    btn.disabled = false; btn.textContent = orig;
+  }
 }
 
 /* ---- outcome (approved / rejected / unknown) ---- */
