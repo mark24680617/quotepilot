@@ -81,3 +81,31 @@ def test_webgate_approve_roundtrip():
     assert out["decision"].notes == "ok"
     # second resolve is a no-op
     assert gate.resolve("reject", None) is False
+
+
+def test_api_bootstrap():
+    resp = client.get("/api/bootstrap")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "samples" in data
+    assert "submissions" in data
+    assert "archived" in data
+    assert "inquiry_zh_1.txt" in data["samples"]
+
+
+def test_api_submit_validation():
+    resp = client.post("/api/submit", json={"email_text": "hi"})
+    assert resp.status_code == 422
+
+
+def test_api_unknown_submission():
+    resp = client.get("/api/s/nope")
+    assert resp.status_code == 404
+    
+    resp = client.post("/api/s/nope/decision", json={"action": "approve"})
+    assert resp.status_code == 404
+
+
+def test_cors():
+    resp = client.get("/", headers={"Origin": "https://example.github.io"})
+    assert resp.headers.get("access-control-allow-origin") == "*"
