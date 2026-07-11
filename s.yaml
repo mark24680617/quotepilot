@@ -51,23 +51,25 @@ resources:
               - POST
               - HEAD
 
+  # (Option A, currently disabled — the static GitHub Pages frontend is used
+  #  instead. Re-enable + add the DNS CNAME for a custom domain later.)
   # Custom domain: the fcapp.run system domain force-downloads HTML
   # (Content-Disposition: attachment) and forbids 3xx — a bound custom domain
   # lifts both restrictions. Requires DNS CNAME:
   #   quotepilot.luqlabs.com -> 5473177672583071.ap-southeast-1.fc.aliyuncs.com
-  quotepilot_domain:
-    component: fc3-domain
-    props:
-      region: ${vars.region}
-      domainName: quotepilot.luqlabs.com
+  #   quotepilot_domain:
+  #     component: fc3-domain
+  #     props:
+  #       region: ${vars.region}
+  #       domainName: quotepilot.luqlabs.com
       # SECURITY: HTTP is a temporary bootstrap until a certificate is issued.
       # Before sharing the link publicly, upgrade to HTTPS: request a free DV
       # cert (Alibaba Cloud SSL console) for quotepilot.luqlabs.com, then set
       #   protocol: HTTP,HTTPS
       #   certConfig: { certName, certificate, privateKey }
       # Demo data only (bundled samples) — no real customer data transits this host.
-      protocol: HTTP
-      routeConfig:
-        routes:
-          - path: /*
-            functionName: quotepilot
+  #       protocol: HTTP
+  #       routeConfig:
+  #         routes:
+  #           - path: /*
+  #             functionName: quotepilot
