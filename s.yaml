@@ -50,3 +50,18 @@ resources:
               - GET
               - POST
               - HEAD
+
+  # Custom domain: the fcapp.run system domain force-downloads HTML
+  # (Content-Disposition: attachment) and forbids 3xx — a bound custom domain
+  # lifts both restrictions. Requires DNS CNAME:
+  #   quotepilot.luqlabs.com -> 5473177672583071.ap-southeast-1.fc.aliyuncs.com
+  quotepilot_domain:
+    component: fc3-domain
+    props:
+      region: ${vars.region}
+      domainName: quotepilot.luqlabs.com
+      protocol: HTTP
+      routeConfig:
+        routes:
+          - path: /*
+            functionName: quotepilot
