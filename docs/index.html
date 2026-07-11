@@ -1,1491 +1,1270 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QuotePilot 🛩️</title>
-    <style>
-        :root {
-            --ink: #1a1d24;
-            --muted: #6b7280;
-            --line: #e5e7eb;
-            --accent: #0f4c81;
-            --soft: #f4f6f9;
-        }
-        
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif;
-            background-color: var(--soft);
-            color: var(--ink);
-            line-height: 1.6;
-        }
-        
-        .header {
-            position: sticky;
-            top: 0;
-            background: white;
-            padding: 16px 24px;
-            border-bottom: 1px solid var(--line);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        .brand {
-            font-size: 24px;
-            font-weight: bold;
-            color: var(--accent);
-            text-decoration: none;
-        }
-        
-        .subtitle {
-            color: var(--muted);
-            font-size: 14px;
-        }
-        
-        .container {
-            max-width: 1080px;
-            margin: 0 auto;
-            padding: 24px;
-        }
-        
-        .card {
-            background: white;
-            border: 1px solid var(--line);
-            border-radius: 10px;
-            padding: 18px;
-            margin-bottom: 20px;
-        }
-        
-        .card-title {
-            font-size: 18px;
-            font-weight: bold;
-            margin-bottom: 16px;
-            color: var(--ink);
-        }
-        
-        .btn {
-            background-color: var(--accent);
-            color: white;
-            border: none;
-            border-radius: 6px;
-            padding: 8px 16px;
-            cursor: pointer;
-            font-size: 14px;
-        }
-        
-        .btn:hover {
-            opacity: 0.9;
-        }
-        
-        .btn:disabled {
-            background-color: #ccc;
-            cursor: not-allowed;
-        }
-        
-        .btn-approve {
-            background-color: #15803d;
-        }
-        
-        .btn-reject {
-            background-color: #b91c1c;
-        }
-        
-        .status-badge {
-            color: white;
-            border-radius: 999px;
-            padding: 2px 10px;
-            font-size: 12px;
-            display: inline-block;
-        }
-        
-        .status-running {
-            background-color: #b45309;
-        }
-        
-        .status-awaiting_approval {
-            background-color: #b91c1c;
-        }
-        
-        .status-approved {
-            background-color: #15803d;
-        }
-        
-        .status-rejected,
-        .status-failed {
-            background-color: #6b7280;
-        }
-        
-        .severity-info {
-            background-color: var(--accent);
-            color: white;
-            border-radius: 4px;
-            padding: 2px 6px;
-            font-size: 12px;
-        }
-        
-        .severity-warn {
-            background-color: #b45309;
-            color: white;
-            border-radius: 4px;
-            padding: 2px 6px;
-            font-size: 12px;
-        }
-        
-        .severity-block {
-            background-color: #b91c1c;
-            color: white;
-            border-radius: 4px;
-            padding: 2px 6px;
-            font-size: 12px;
-        }
-        
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        
-        th, td {
-            padding: 10px;
-            text-align: left;
-            border-bottom: 1px solid var(--line);
-        }
-        
-        th {
-            color: var(--muted);
-            font-weight: normal;
-            font-size: 14px;
-        }
-        
-        tr:last-child td {
-            border-bottom: none;
-        }
-        
-        textarea, input[type="text"], input[type="number"] {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid var(--line);
-            border-radius: 6px;
-            resize: vertical;
-        }
-        
-        .error-message {
-            color: #b91c1c;
-            margin-top: 8px;
-            font-size: 14px;
-        }
-        
-        .success-message {
-            color: #15803d;
-            margin-top: 8px;
-            font-size: 14px;
-        }
-        
-        .warning-banner {
-            background-color: #fef3c7;
-            color: #b45309;
-            padding: 10px;
-            border-radius: 6px;
-            margin-bottom: 16px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        .reconnect-banner {
-            background-color: #dbeafe;
-            color: #1e40af;
-            padding: 8px;
-            border-radius: 4px;
-            margin-bottom: 16px;
-            font-size: 14px;
-            text-align: center;
-        }
-        
-        .stage-item {
-            display: flex;
-            align-items: center;
-            padding: 8px 0;
-        }
-        
-        .stage-icon {
-            margin-right: 10px;
-            font-size: 18px;
-        }
-        
-        .stage-text {
-            color: var(--muted);
-        }
-        
-        .completed .stage-text {
-            color: var(--ink);
-            font-weight: bold;
-        }
-        
-        .preview-frame {
-            width: 100%;
-            height: 520px;
-            border: 1px solid var(--line);
-            border-radius: 8px;
-        }
-        
-        .decision-bar {
-            margin-top: 20px;
-            padding-top: 20px;
-            border-top: 1px solid var(--line);
-        }
-        
-        .notes-input {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid var(--line);
-            border-radius: 6px;
-            margin-bottom: 10px;
-        }
-        
-        .block-warning {
-            background-color: #fee2e2;
-            color: #b91c1c;
-            padding: 10px;
-            border-radius: 6px;
-            margin-top: 10px;
-        }
-        
-        .footer {
-            text-align: center;
-            padding: 20px;
-            color: var(--muted);
-            font-size: 14px;
-        }
-        
-        .footer a {
-            color: var(--accent);
-        }
-        
-        .back-link {
-            display: inline-block;
-            margin-bottom: 16px;
-            color: var(--accent);
-            text-decoration: none;
-        }
-        
-        .back-link:hover {
-            text-decoration: underline;
-        }
-        
-        .artifact-list {
-            margin-top: 16px;
-        }
-        
-        .artifact-item {
-            margin-bottom: 8px;
-        }
-        
-        .artifact-btn {
-            background-color: #e5e7eb;
-            color: var(--ink);
-            border: none;
-            border-radius: 4px;
-            padding: 4px 8px;
-            cursor: pointer;
-            font-size: 14px;
-            margin-right: 8px;
-        }
-        
-        .artifact-btn:hover {
-            background-color: #d1d5db;
-        }
-        
-        .tokens-info {
-            margin-top: 16px;
-            color: var(--muted);
-            font-size: 14px;
-        }
-        
-        .empty-state {
-            color: var(--muted);
-            text-align: center;
-            padding: 20px;
-        }
-        
-        .sticky-bottom-bar {
-            position: sticky;
-            bottom: 0;
-            background: white;
-            padding: 16px;
-            border-top: 1px solid var(--line);
-            text-align: center;
-            margin-top: 20px;
-        }
-        
-        .demo-note {
-            font-size: 12px;
-            color: var(--muted);
-            margin-top: 8px;
-        }
-        
-        .catalog-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        
-        .catalog-table th, .catalog-table td {
-            padding: 8px;
-            text-align: left;
-            border-bottom: 1px solid var(--line);
-        }
-        
-        .catalog-table input {
-            width: 100%;
-            padding: 4px;
-            border: 1px solid var(--line);
-            border-radius: 4px;
-        }
-        
-        .delete-btn {
-            background-color: #b91c1c;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            padding: 4px 8px;
-            cursor: pointer;
-            font-size: 12px;
-        }
-        
-        .add-product-btn {
-            background-color: #15803d;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            padding: 8px 12px;
-            cursor: pointer;
-            margin-top: 10px;
-        }
-        
-        .import-spinner {
-            display: inline-block;
-            width: 16px;
-            height: 16px;
-            border: 2px solid rgba(255,255,255,.3);
-            border-radius: 50%;
-            border-top-color: white;
-            animation: spin 1s ease-in-out infinite;
-            margin-right: 8px;
-        }
-        
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-    </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>QuotePilot — AI autopilot for inquiry emails</title>
+<style>
+/* ============ Design tokens ============ */
+:root{
+  --blue:#0f4c81; --blue-deep:#0b3a64; --blue-ink:#092c4c;
+  --blue-tint:#eaf1f7; --blue-ghost:#f4f8fb;
+  --ink:#182430; --muted:#5a6b7b; --faint:#93a1ae;
+  --bg:#f4f6f9; --card:#ffffff; --line:#e1e8ee; --line2:#eef2f6;
+  --ok:#177a4c; --ok-bg:#e6f4ec; --ok-line:#bfe3cf;
+  --warn:#8a5c00; --warn-bg:#fbf1d9; --warn-line:#eeda9f;
+  --bad:#b23227; --bad-bg:#faeae7; --bad-line:#f0c6bf;
+  --info:#0f4c81; --info-bg:#eaf1f7; --info-line:#c4d8e8;
+  --amber:#b07900; --amber-bg:#fff8e8;
+  --r:14px; --rs:9px;
+  --shadow:0 1px 2px rgba(13,36,58,.05),0 6px 20px rgba(13,36,58,.06);
+  --shadow-lg:0 2px 4px rgba(13,36,58,.06),0 14px 40px rgba(13,36,58,.10);
+  --sans:"Helvetica Neue",Helvetica,"PingFang SC","Hiragino Sans GB","Source Han Sans SC","Noto Sans CJK SC","Microsoft YaHei",system-ui,sans-serif;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{font-family:var(--sans);background:var(--bg);color:var(--ink);font-size:15px;line-height:1.55;min-height:100vh;display:flex;flex-direction:column}
+a{color:var(--blue);text-decoration:none}
+a:hover{color:var(--blue-deep)}
+button{font-family:inherit;cursor:pointer}
+input,textarea,select{font-family:inherit;font-size:14px;color:var(--ink)}
+::selection{background:rgba(15,76,129,.16)}
+.mono{font-family:var(--mono)}
+.faint{color:var(--faint)}
+
+/* ============ Type ============ */
+.ann{font-style:normal;font-weight:500;color:var(--muted)}
+h1{font-size:26px;line-height:1.3;letter-spacing:-.01em}
+h2{font-size:17px;font-weight:700}
+h2 .ann{font-size:12.5px;margin-left:8px;letter-spacing:.02em}
+.sub{color:var(--muted);font-size:13.5px;margin-top:4px}
+.sub .ann{color:var(--faint)}
+:lang(zh) h1,:lang(zh) h2{letter-spacing:0}
+
+/* ============ Shell ============ */
+.top{position:sticky;top:0;z-index:40;background:rgba(255,255,255,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.top-in{max-width:1060px;margin:0 auto;padding:0 22px;height:58px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+.brand{display:flex;align-items:center;gap:10px;color:var(--ink)}
+.logo{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,var(--blue),var(--blue-deep));color:#fff;display:grid;place-items:center;font-weight:800;font-size:12.5px;letter-spacing:.02em;box-shadow:0 2px 6px rgba(15,76,129,.35)}
+.brand b{font-size:15.5px;font-weight:750;letter-spacing:-.01em}
+.brand i{font-style:normal;font-weight:500;color:var(--muted);font-size:12.5px;margin-left:7px}
+.nav{display:flex;gap:4px}
+.nav a{display:flex;align-items:center;gap:6px;padding:7px 13px;border-radius:9px;font-size:14px;font-weight:600;color:var(--muted)}
+.nav a:hover{background:var(--blue-ghost);color:var(--ink)}
+.nav a.on{background:var(--blue-tint);color:var(--blue-deep)}
+main{flex:1;width:100%}
+.wrap{max-width:1060px;margin:0 auto;padding:26px 22px 90px}
+.foot{border-top:1px solid var(--line);background:#fff}
+.foot-in{max-width:1060px;margin:0 auto;padding:18px 22px;font-size:12px;color:var(--faint);display:flex;flex-wrap:wrap;gap:6px 24px}
+.foot-in a{color:var(--muted)}
+
+/* ============ Cards / layout ============ */
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
+.card+.card,.card+section,section+.card{margin-top:18px}
+.card-pad{padding:22px 24px}
+.sec-h{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:30px 2px 12px}
+.view{animation:fadeUp .35s cubic-bezier(.2,.7,.3,1) both}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+/* ============ Buttons ============ */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:10px;border:1px solid transparent;font-weight:650;font-size:14px;padding:9px 16px;transition:transform .08s ease,box-shadow .15s ease,background .15s ease;user-select:none;white-space:nowrap}
+.btn:active{transform:scale(.97)}
+.btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.btn-pri{background:var(--blue);color:#fff;box-shadow:0 1px 2px rgba(11,58,100,.3),0 4px 12px rgba(15,76,129,.22)}
+.btn-pri:hover:not(:disabled){background:var(--blue-deep)}
+.btn-big{font-size:15.5px;padding:12px 24px;border-radius:12px}
+.btn-ghost{background:#fff;border-color:var(--line);color:var(--ink)}
+.btn-ghost:hover:not(:disabled){border-color:#c8d3dd;background:var(--blue-ghost)}
+.btn-ok{background:var(--ok);color:#fff;box-shadow:0 1px 2px rgba(23,122,76,.3),0 4px 12px rgba(23,122,76,.2)}
+.btn-ok:hover:not(:disabled){background:#12653e}
+.btn-danger{background:#fff;border-color:var(--bad-line);color:var(--bad)}
+.btn-danger:hover:not(:disabled){background:var(--bad-bg)}
+.btn-sm{font-size:12.5px;padding:6px 11px;border-radius:8px}
+.btn .spin{width:13px;height:13px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:rot .7s linear infinite}
+.btn-ghost .spin,.btn-danger .spin{border-color:rgba(15,76,129,.25);border-top-color:var(--blue)}
+@keyframes rot{to{transform:rotate(360deg)}}
+
+/* ============ Pills / severity ============ */
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:650;padding:3.5px 10px;border-radius:99px;border:1px solid;white-space:nowrap}
+.pill i{width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
+.p-running{color:var(--blue);background:var(--info-bg);border-color:var(--info-line)}
+.p-running i{animation:blink 1.1s ease-in-out infinite}
+@keyframes blink{50%{opacity:.25}}
+.p-awaiting{color:var(--amber);background:var(--amber-bg);border-color:var(--warn-line)}
+.p-approved{color:var(--ok);background:var(--ok-bg);border-color:var(--ok-line)}
+.p-rejected{color:var(--muted);background:#f1f4f7;border-color:var(--line)}
+.p-failed{color:var(--bad);background:var(--bad-bg);border-color:var(--bad-line)}
+.p-unknown{color:var(--muted);background:#f1f4f7;border-color:var(--line)}
+
+/* ============ Dashboard hero ============ */
+.hero{padding:26px 26px 22px;border-radius:16px;background:linear-gradient(180deg,#fff 0%,#fbfdfe 100%)}
+.samples{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0 10px}
+.samples-label{font-size:12px;color:var(--faint);align-self:center;margin-right:2px}
+.chip{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);background:#fff;border-radius:99px;padding:6px 13px;font-size:12.5px;font-weight:600;color:var(--ink);transition:all .15s}
+.chip:hover{border-color:var(--blue);color:var(--blue);background:var(--blue-ghost)}
+.chip .lang{font-size:9.5px;font-weight:800;letter-spacing:.06em;color:#fff;background:var(--faint);border-radius:4px;padding:1.5px 5px}
+.chip:hover .lang{background:var(--blue)}
+.chip.loading{opacity:.55;pointer-events:none}
+.email-box{width:100%;min-height:190px;resize:vertical;border:1px solid var(--line);border-radius:12px;padding:14px 16px;font-size:13.5px;line-height:1.6;font-family:var(--mono);background:#fcfdfe;transition:border-color .15s,box-shadow .15s}
+.email-box:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(15,76,129,.12)}
+.email-box::placeholder{color:var(--faint);font-family:var(--sans)}
+.hero-foot{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:14px;flex-wrap:wrap}
+.char-hint{font-size:12px;color:var(--faint)}
+.char-hint.bad{color:var(--bad);font-weight:600}
+
+/* ============ Run rows ============ */
+.rows{display:flex;flex-direction:column}
+.row{display:grid;grid-template-columns:1fr auto auto auto;gap:10px 18px;align-items:center;padding:13px 20px;border-top:1px solid var(--line2);color:var(--ink);transition:background .12s}
+.row:first-child{border-top:none}
+.row:hover{background:var(--blue-ghost)}
+.row-main{min-width:0}
+.row-main b{display:block;font-size:14px;font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row-sub{font-size:11.5px;color:var(--faint);margin-top:1px}
+.row-amt{text-align:right;line-height:1.3}
+.row-amt b{display:block;font-size:14px;font-variant-numeric:tabular-nums}
+.row-amt span{font-size:11.5px;color:var(--faint);font-variant-numeric:tabular-nums}
+.row-time{font-size:11.5px;color:var(--faint);min-width:64px;text-align:right}
+.empty-hint{padding:26px 20px;text-align:center;color:var(--faint);font-size:13px}
+.live-tag{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:700;letter-spacing:.05em;color:var(--ok);text-transform:uppercase}
+.live-tag i{width:6px;height:6px;border-radius:50%;background:var(--ok);animation:blink 1.2s infinite}
+
+/* ============ Pipeline ============ */
+.pipe-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap}
+.pipe-meta{display:flex;gap:14px;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.pipe-meta b{color:var(--blue);font-size:15px}
+.pipe{margin-top:22px}
+.stg{display:grid;grid-template-columns:26px 1fr auto;gap:0 14px;position:relative}
+.stg-rail{display:flex;flex-direction:column;align-items:center}
+.stg-dot{width:22px;height:22px;border-radius:50%;border:2px solid var(--line);background:#fff;display:grid;place-items:center;font-size:11px;font-weight:800;color:#fff;flex:none;transition:all .3s;z-index:1}
+.stg-line{width:2px;flex:1;background:var(--line);min-height:18px;transition:background .3s}
+.stg-body{padding:0 0 20px}
+.stg:last-child .stg-body{padding-bottom:2px}
+.stg-zh{font-size:14.5px;font-weight:650;color:var(--faint);transition:color .3s;line-height:22px}
+.stg-note{font-size:12px;color:var(--muted);margin-top:2px;min-height:0}
+.stg-state{font-size:11px;font-weight:650;color:var(--faint);line-height:22px;font-variant-numeric:tabular-nums}
+.stg.is-done .stg-dot{background:var(--ok);border-color:var(--ok)}
+.stg.is-done .stg-dot::after{content:"✓"}
+.stg.is-done .stg-line{background:var(--ok-line)}
+.stg.is-done .stg-zh{color:var(--ink)}
+.stg.is-done .stg-state{color:var(--ok)}
+.stg.is-active .stg-dot{border-color:var(--blue);box-shadow:0 0 0 5px rgba(15,76,129,.13);animation:ring 1.4s ease-in-out infinite}
+@keyframes ring{50%{box-shadow:0 0 0 8px rgba(15,76,129,.06)}}
+.stg.is-active .stg-dot::after{content:"";width:8px;height:8px;border-radius:50%;background:var(--blue);animation:blink 1s infinite}
+.stg.is-active .stg-zh{color:var(--blue-deep)}
+.stg.is-active .stg-state{color:var(--blue)}
+.stg.is-active .stg-note{background:linear-gradient(90deg,var(--muted) 25%,var(--faint) 45%,var(--muted) 65%);background-size:200% 100%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;animation:sheen 1.6s linear infinite}
+@keyframes sheen{to{background-position:-200% 0}}
+.stg.is-failed .stg-dot{background:var(--bad);border-color:var(--bad)}
+.stg.is-failed .stg-dot::after{content:"✕"}
+.stg.is-failed .stg-zh{color:var(--bad)}
+.stg.is-failed .stg-state{color:var(--bad)}
+.reconnect{margin-top:16px;font-size:12.5px;color:var(--amber);background:var(--amber-bg);border:1px solid var(--warn-line);border-radius:9px;padding:8px 13px;display:flex;align-items:center;gap:8px}
+.reconnect::before{content:"";width:8px;height:8px;border:2px solid var(--amber);border-top-color:transparent;border-radius:50%;animation:rot .8s linear infinite;flex:none}
+
+/* ============ Approval gate ============ */
+.gate{border:1px solid var(--warn-line);border-radius:16px;background:linear-gradient(180deg,var(--amber-bg),#fff 60%);box-shadow:var(--shadow-lg);overflow:hidden}
+.gate-band{padding:22px 26px 20px;border-bottom:1px dashed var(--warn-line)}
+.gate-badge{display:inline-flex;align-items:center;gap:7px;font-size:10.5px;font-weight:800;letter-spacing:.09em;color:var(--amber);background:#fff;border:1px solid var(--warn-line);border-radius:99px;padding:4px 11px;text-transform:uppercase}
+.gate-badge i{width:7px;height:7px;border-radius:50%;background:var(--amber);animation:blink 1.4s infinite}
+.gate-band h2{font-size:20px;margin-top:12px;letter-spacing:-.01em}
+.ministages{display:flex;align-items:center;gap:5px;margin-top:14px;flex-wrap:wrap}
+.ministages .md{width:9px;height:9px;border-radius:50%;background:var(--ok)}
+.ministages .ml{width:14px;height:2px;background:var(--ok-line)}
+.ministages .mg{width:22px;height:22px;border-radius:50%;border:2px dashed var(--amber);display:grid;place-items:center;margin-left:2px}
+.ministages .mg i{width:8px;height:8px;border-radius:50%;background:var(--amber)}
+.ministages .mtxt{font-size:11.5px;color:var(--muted);margin-left:8px}
+
+/* stats strip */
+.stats{display:flex;flex-wrap:wrap;gap:0}
+.stat{padding:16px 26px;border-right:1px solid var(--line2);min-width:150px}
+.stat:last-child{border-right:none}
+.stat .k{font-size:11px;font-weight:650;color:var(--faint);letter-spacing:.04em}
+.stat .v{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:2px;letter-spacing:-.01em}
+.stat .v small{font-size:12px;color:var(--muted);font-weight:550;margin-left:6px}
+
+/* flags */
+.flag{display:grid;grid-template-columns:auto 1fr;gap:12px;padding:13px 16px;border:1px solid;border-radius:11px;margin-top:10px;background:#fff}
+.flag:first-child{margin-top:0}
+.flag .sev{font-size:10px;font-weight:800;letter-spacing:.06em;border-radius:6px;padding:3px 8px;height:fit-content;text-transform:uppercase;white-space:nowrap}
+.flag .zh{font-size:13.5px;font-weight:600;line-height:1.5}
+.flag .en{font-size:12px;color:var(--muted);margin-top:2px;line-height:1.5}
+.flag code{font-size:10.5px;color:var(--faint);font-family:var(--mono);display:block;margin-top:5px}
+.f-info{border-color:var(--info-line);background:linear-gradient(90deg,var(--info-bg),#fff 30%)}
+.f-info .sev{background:var(--info-bg);color:var(--info)}
+.f-warn{border-color:var(--warn-line);background:linear-gradient(90deg,var(--warn-bg),#fff 30%)}
+.f-warn .sev{background:var(--warn-bg);color:var(--warn)}
+.f-block{border-color:var(--bad-line);background:linear-gradient(90deg,var(--bad-bg),#fff 30%)}
+.f-block .sev{background:var(--bad-bg);color:var(--bad)}
+.noflags{display:flex;align-items:center;gap:9px;padding:14px 16px;border:1px solid var(--ok-line);background:var(--ok-bg);border-radius:11px;font-size:13px;font-weight:600;color:var(--ok)}
+
+/* summary + preview */
+.summary-pre{font-family:var(--mono);font-size:12.5px;line-height:1.7;white-space:pre-wrap;word-break:break-word;background:#fbfcfd;border:1px solid var(--line2);border-radius:10px;padding:15px 17px;max-height:340px;overflow:auto;color:#2c3a47}
+.preview-frame{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff;position:relative}
+.preview-frame iframe{display:block;width:100%;height:560px;border:none;background:#fff}
+.preview-load{position:absolute;inset:0;display:grid;place-items:center;background:#fbfcfd;font-size:13px;color:var(--muted)}
+.approve-grid{display:grid;grid-template-columns:5fr 6fr;gap:18px;margin-top:18px;align-items:start}
+.notes-box{width:100%;min-height:76px;resize:vertical;border:1px solid var(--line);border-radius:10px;padding:11px 14px;font-size:13.5px;line-height:1.6;background:#fff}
+.notes-box:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(15,76,129,.12)}
+.decide{display:flex;gap:12px;margin-top:14px;flex-wrap:wrap}
+.decide .btn{flex:1;min-width:170px;padding:13px 20px;font-size:15px}
+.block-note{margin-top:12px;font-size:12.5px;color:var(--bad);background:var(--bad-bg);border:1px solid var(--bad-line);border-radius:9px;padding:9px 13px;line-height:1.55}
+
+/* outcome */
+.banner{display:flex;align-items:center;gap:16px;padding:20px 26px;border-radius:16px;border:1px solid;box-shadow:var(--shadow)}
+.banner .bi{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;font-size:19px;font-weight:800;color:#fff;flex:none}
+.banner h2{font-size:19px}
+.b-ok{background:linear-gradient(180deg,var(--ok-bg),#fff);border-color:var(--ok-line)}
+.b-ok .bi{background:var(--ok)}
+.b-rej{background:#f4f6f8;border-color:var(--line)}
+.b-rej .bi{background:var(--faint)}
+.b-bad{background:linear-gradient(180deg,var(--bad-bg),#fff);border-color:var(--bad-line)}
+.b-bad .bi{background:var(--bad)}
+.artifacts{display:flex;gap:9px;flex-wrap:wrap}
+.art-chip{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:#fff;border-radius:9px;padding:8px 13px;font-size:12.5px;font-weight:600;color:var(--ink);transition:all .15s}
+.art-chip:hover{border-color:var(--blue);color:var(--blue);background:var(--blue-ghost)}
+.art-chip .kind{font-size:9.5px;font-weight:800;letter-spacing:.05em;color:var(--blue);background:var(--blue-tint);border-radius:4px;padding:2px 6px;text-transform:uppercase}
+.art-chip.loading{opacity:.55;pointer-events:none}
+.tokens-line{font-size:12px;color:var(--faint);margin-top:14px}
+.tokens-line b{color:var(--muted);font-variant-numeric:tabular-nums}
+.err-pre{font-family:var(--mono);font-size:12.5px;white-space:pre-wrap;word-break:break-word;background:var(--bad-bg);border:1px solid var(--bad-line);color:var(--bad);border-radius:10px;padding:14px 16px;margin-top:14px;max-height:260px;overflow:auto}
+.back-line{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+.back-link{font-size:13px;font-weight:600;color:var(--muted);display:inline-flex;align-items:center;gap:6px}
+.back-link:hover{color:var(--blue)}
+.run-id{font-size:11.5px;color:var(--faint);font-family:var(--mono)}
+
+/* ============ Settings ============ */
+.lang-card{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.lang-card .lc-txt h2{margin-bottom:2px}
+.seg{display:inline-flex;background:var(--blue-ghost);border:1px solid var(--line);border-radius:11px;padding:3px;gap:3px}
+.seg button{border:none;background:transparent;border-radius:8px;padding:8px 18px;font-size:14px;font-weight:650;color:var(--muted);transition:all .15s;white-space:nowrap}
+.seg button.on{background:#fff;color:var(--blue-deep);box-shadow:0 1px 3px rgba(13,36,58,.14)}
+.import-card{background:linear-gradient(135deg,#f5f9fd,#fff 55%);border-color:var(--info-line)}
+.import-row{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
+.import-row input{flex:1;min-width:220px;border:1px solid var(--line);border-radius:10px;padding:10px 14px;background:#fff}
+.import-row input:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(15,76,129,.12)}
+.import-phase{margin-top:12px;font-size:13px;color:var(--blue);display:flex;align-items:center;gap:9px}
+.import-phase::before{content:"";width:12px;height:12px;border:2px solid var(--info-line);border-top-color:var(--blue);border-radius:50%;animation:rot .8s linear infinite;flex:none}
+.import-note{margin-top:12px;font-size:13px;border-radius:9px;padding:10px 14px;line-height:1.55}
+.in-ok{background:var(--ok-bg);border:1px solid var(--ok-line);color:var(--ok)}
+.in-warn{background:var(--warn-bg);border:1px solid var(--warn-line);color:var(--warn)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px 18px;margin-top:16px}
+.fld{display:flex;flex-direction:column;gap:5px}
+.fld>span{font-size:12px;font-weight:650;color:var(--muted)}
+.fld input,.fld textarea{border:1px solid var(--line);border-radius:9px;padding:9px 12px;background:#fff;transition:border-color .15s,box-shadow .15s}
+.fld textarea{min-height:66px;resize:vertical;line-height:1.55}
+.fld input:focus,.fld textarea:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(15,76,129,.12)}
+.fld.full{grid-column:1/-1}
+.scroll-x{overflow-x:auto;margin-top:16px;border:1px solid var(--line2);border-radius:11px}
+.cat-table{border-collapse:collapse;width:100%;min-width:880px;font-size:13px}
+.cat-table th{font-size:11px;font-weight:700;color:var(--faint);text-align:left;padding:9px 10px;background:#f8fafc;border-bottom:1px solid var(--line2);letter-spacing:.03em;white-space:nowrap}
+.cat-table td{padding:6px 6px;border-bottom:1px solid var(--line2);vertical-align:middle}
+.cat-table tr.desc-row td{padding-top:0;border-bottom:1px solid var(--line);padding-bottom:10px}
+.cat-table tr:last-child td{border-bottom:none}
+.cat-table input{width:100%;border:1px solid transparent;border-radius:7px;padding:7px 9px;background:transparent;font-size:12.5px}
+.cat-table input:hover{background:#f6f9fb}
+.cat-table input:focus{outline:none;border-color:var(--blue);background:#fff;box-shadow:0 0 0 2px rgba(15,76,129,.1)}
+.cat-table .num input{text-align:right;font-variant-numeric:tabular-nums;font-family:var(--mono);font-size:12px}
+.cat-table .disc input{font-family:var(--mono);font-size:12px}
+.del-btn{border:none;background:none;color:var(--faint);font-size:15px;padding:5px 8px;border-radius:7px;line-height:1}
+.del-btn:hover{color:var(--bad);background:var(--bad-bg)}
+.demo-note{display:flex;gap:10px;align-items:flex-start;font-size:12.5px;color:var(--muted);background:var(--blue-ghost);border:1px solid var(--line2);border-radius:11px;padding:12px 16px;line-height:1.6}
+.demo-note b{color:var(--blue-deep)}
+.savebar{position:fixed;left:0;right:0;bottom:0;z-index:50;background:rgba(24,36,48,.97);backdrop-filter:blur(8px);color:#fff;transform:translateY(110%);transition:transform .28s cubic-bezier(.2,.8,.3,1)}
+.savebar.show{transform:none}
+.savebar-in{max-width:1060px;margin:0 auto;padding:12px 22px;display:flex;align-items:center;justify-content:space-between;gap:14px}
+.savebar-in>span{font-size:13.5px;font-weight:600}
+.savebar-in .btns{display:flex;gap:10px}
+.savebar .btn-ghost{background:transparent;border-color:rgba(255,255,255,.25);color:#fff}
+.savebar .btn-ghost:hover{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.4)}
+.api-line{margin-top:22px;font-size:11px;color:var(--faint);font-family:var(--mono);word-break:break-all}
+
+/* ============ Skeleton / toast / misc ============ */
+.skel{border-radius:9px;background:linear-gradient(90deg,#eef2f6 25%,#f7fafc 45%,#eef2f6 65%);background-size:200% 100%;animation:sheenbg 1.4s linear infinite}
+@keyframes sheenbg{to{background-position:-200% 0}}
+.coldstart{display:flex;align-items:center;gap:10px;margin-top:18px;font-size:13px;color:var(--muted)}
+.coldstart::before{content:"";width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--blue);border-radius:50%;animation:rot .9s linear infinite;flex:none}
+#toasts{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);z-index:100;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none;width:max-content;max-width:92vw}
+.toast{background:#182430;color:#fff;font-size:13.5px;font-weight:600;border-radius:10px;padding:11px 18px;box-shadow:0 8px 30px rgba(13,36,58,.35);animation:toastIn .3s cubic-bezier(.2,.9,.3,1.3) both;max-width:100%}
+.toast.t-warn{background:#7a5200}
+.toast.t-bad{background:#8f2a20}
+.toast.t-ok{background:var(--ok)}
+@keyframes toastIn{from{opacity:0;transform:translateY(14px) scale(.95)}to{opacity:1;transform:none}}
+.center-card{max-width:560px;margin:40px auto;text-align:center;padding:40px 34px}
+.center-card .glyph{width:52px;height:52px;border-radius:50%;margin:0 auto 18px;display:grid;place-items:center;font-size:22px;font-weight:800}
+.center-card p{color:var(--muted);font-size:13.5px;margin:12px 0 20px;line-height:1.65}
+
+/* ============ Responsive ============ */
+@media (max-width:860px){
+  .approve-grid{grid-template-columns:1fr}
+  .grid2{grid-template-columns:1fr}
+  .stats{flex-direction:column}
+  .stat{border-right:none;border-bottom:1px solid var(--line2);padding:13px 24px}
+  .stat:last-child{border-bottom:none}
+}
+@media (max-width:560px){
+  .wrap{padding:18px 14px 110px}
+  .top-in{padding:0 14px}
+  .brand i{display:none}
+  h1{font-size:21px}
+  .hero{padding:20px 16px}
+  .card-pad{padding:18px 16px}
+  .row{grid-template-columns:1fr auto;grid-template-rows:auto auto;padding:12px 16px}
+  .row-time{display:none}
+  .row-amt{text-align:left;grid-row:2;grid-column:1}
+  .decide .btn{min-width:100%}
+  .preview-frame iframe{height:440px}
+  .savebar-in{padding:10px 14px;flex-wrap:wrap}
+  .hero-foot .btn-big{width:100%}
+  .lang-card{flex-direction:column;align-items:stretch}
+}
+</style>
 </head>
 <body>
-    <div class="header">
-        <a href="#/" class="brand">QuotePilot 🛩️</a>
-        <div class="subtitle">LUQ LABS · email → bilingual quote autopilot · powered by Qwen on Alibaba Cloud</div>
-        <a href="#/settings" class="subtitle">⚙️ 设置 Settings</a>
-    </div>
-    
-    <div class="container" id="main-container">
-        <!-- Content will be injected here -->
-    </div>
-    
-    <div class="footer">
-        Backend: Alibaba Cloud Function Compute (ap-southeast-1) · Rates by <a href="https://www.exchangerate-api.com">Exchange Rate API</a>
-    </div>
 
-    <script>
-        // Configuration
-        const API = localStorage.getItem("QP_API") 
-                 || "https://quotepilot-kafogbnbjc.ap-southeast-1.fcapp.run";
-        
-        // Global state
-        let currentRoute = null;
-        let activeTimers = [];
-        let navToken = 0;
-        
-        // Helper functions
-        function esc(str) {
-            if (typeof str !== 'string') return '';
-            return str
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#x27;');
-        }
-        
-        function formatDate(dateStr) {
-            return new Date(dateStr).toLocaleString('zh-CN');
-        }
-        
-        function formatCurrency(amount, currency) {
-            if (amount === null || amount === undefined) return 'N/A';
-            return `${currency} ${Number(amount).toFixed(2)}`;
-        }
-        
-        function getStatusClass(status) {
-            switch (status) {
-                case 'running': return 'status-running';
-                case 'awaiting_approval': return 'status-awaiting_approval';
-                case 'approved': return 'status-approved';
-                case 'rejected': return 'status-rejected';
-                case 'failed': return 'status-failed';
-                default: return 'status-failed'; // fallback for unknown statuses
-            }
-        }
-        
-        function getSeverityClass(severity) {
-            switch (severity) {
-                case 'info': return 'severity-info';
-                case 'warn': return 'severity-warn';
-                case 'block': return 'severity-block';
-                default: return 'severity-info';
-            }
-        }
-        
-        function clearTimers() {
-            activeTimers.forEach(timer => clearInterval(timer));
-            activeTimers = [];
-        }
-        
-        function fetchWithTimeout(url, options = {}, timeout = 30000) {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), timeout);
-            
-            return fetch(url, { ...options, signal: controller.signal })
-                .then(response => {
-                    clearTimeout(timeoutId);
-                    return response;
-                })
-                .catch(error => {
-                    clearTimeout(timeoutId);
-                    throw error;
-                });
-        }
-        
-        // Parse discount string like "50:8, 100:12" to array of objects
-        function parseDiscounts(discountStr) {
-            if (!discountStr || discountStr.trim() === '') return [];
-            return discountStr.split(',').map(item => {
-                const [qty, pct] = item.split(':').map(Number);
-                return { min_qty: qty, pct: pct };
-            }).filter(d => !isNaN(d.min_qty) && !isNaN(d.pct));
-        }
-        
-        // Serialize discounts array to string like "50:8, 100:12"
-        function serializeDiscounts(discounts) {
-            if (!Array.isArray(discounts) || discounts.length === 0) return '';
-            return discounts.map(d => `${d.min_qty}:${d.pct}`).join(', ');
-        }
-        
-        // Router
-        function handleHashChange() {
-            const hash = window.location.hash.substring(1);
-            
-            // Clear previous timers
-            clearTimers();
-            
-            // Increment navigation token
-            navToken++;
-            
-            if (hash.startsWith('/s/')) {
-                const sid = hash.substring(3);
-                renderSubmission(sid);
-            } else if (hash === '/settings') {
-                renderSettings();
-            } else {
-                renderDashboard();
-            }
-        }
-        
-        // Settings view
-        async function renderSettings() {
-            const myToken = ++navToken;
-            currentRoute = 'settings';
-            const container = document.getElementById('main-container');
-            
-            // Show loading state
-            container.innerHTML = `
-                <div class="card">
-                    <h2 class="card-title">加载中 Loading...</h2>
-                </div>
-            `;
-            
-            try {
-                const response = await fetchWithTimeout(`${API}/api/profile`);
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                
-                if (myToken !== navToken) return;
-                
-                const profile = await response.json();
-                
-                // Build import card
-                let importCard = `
-                    <div class="card">
-                        <h2 class="card-title">✨ AI 导入 Import from website</h2>
-                        <div style="display: flex; gap: 10px;">
-                            <input type="text" id="import-url" placeholder="输入公司网站 URL Enter company website URL">
-                            <button class="btn" id="import-btn">抓取并识别 Fetch & Extract</button>
-                        </div>
-                        <div id="import-status" style="margin-top: 10px;"></div>
-                    </div>
-                `;
-                
-                // Build company info card
-                let companyCard = `
-                    <div class="card">
-                        <h2 class="card-title">公司信息 Company</h2>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-                            <div>
-                                <label>公司名称 (EN)</label>
-                                <input type="text" id="name-en" value="${esc(profile.seller.name_en)}">
-                            </div>
-                            <div>
-                                <label>公司名称 (ZH)</label>
-                                <input type="text" id="name-zh" value="${esc(profile.seller.name_zh)}">
-                            </div>
-                            <div>
-                                <label>注册地 (EN)</label>
-                                <input type="text" id="jurisdiction-en" value="${esc(profile.seller.jurisdiction_en)}">
-                            </div>
-                            <div>
-                                <label>注册地 (ZH)</label>
-                                <input type="text" id="jurisdiction-zh" value="${esc(profile.seller.jurisdiction_zh)}">
-                            </div>
-                            <div>
-                                <label>网站 Website</label>
-                                <input type="text" id="website" value="${esc(profile.seller.website || '')}">
-                            </div>
-                            <div>
-                                <label>邮箱 Email</label>
-                                <input type="text" id="email" value="${esc(profile.seller.email || '')}">
-                            </div>
-                        </div>
-                        <div style="margin-top: 16px;">
-                            <label>公司描述 Description</label>
-                            <textarea id="description" rows="3">${esc(profile.seller.description || '')}</textarea>
-                        </div>
-                    </div>
-                `;
-                
-                // Build terms card
-                let termsCard = `
-                    <div class="card">
-                        <h2 class="card-title">条款与规则 Terms & Rules</h2>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-                            <div>
-                                <label>付款条款 (EN)</label>
-                                <textarea id="payment-en" rows="3">${esc(profile.terms.payment_en || '')}</textarea>
-                            </div>
-                            <div>
-                                <label>付款条款 (ZH)</label>
-                                <textarea id="payment-zh" rows="3">${esc(profile.terms.payment_zh || '')}</textarea>
-                            </div>
-                            <div>
-                                <label>法律条款 (EN)</label>
-                                <textarea id="legal-en" rows="3">${esc(profile.terms.legal_en || '')}</textarea>
-                            </div>
-                            <div>
-                                <label>法律条款 (ZH)</label>
-                                <textarea id="legal-zh" rows="3">${esc(profile.terms.legal_zh || '')}</textarea>
-                            </div>
-                            <div>
-                                <label>税务说明 (EN)</label>
-                                <textarea id="tax-en" rows="3">${esc(profile.terms.tax_note_en || '')}</textarea>
-                            </div>
-                            <div>
-                                <label>税务说明 (ZH)</label>
-                                <textarea id="tax-zh" rows="3">${esc(profile.terms.tax_note_zh || '')}</textarea>
-                            </div>
-                        </div>
-                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 16px;">
-                            <div>
-                                <label>报价有效期 (天)</label>
-                                <input type="number" id="validity-days" value="${profile.rules.quote_validity_days || 30}">
-                            </div>
-                            <div>
-                                <label>紧急截止期 (天)</label>
-                                <input type="number" id="urgent-days" value="${profile.rules.urgent_deadline_days || 7}">
-                            </div>
-                            <div>
-                                <label>电汇阈值 (USD)</label>
-                                <input type="text" id="wire-threshold" value="${esc(profile.rules.wire_threshold_usd || '5000')}">
-                            </div>
-                        </div>
-                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 16px;">
-                            <div>
-                                <label>最大额外折扣 (%)</label>
-                                <input type="text" id="max-discount" value="${esc(profile.rules.max_extra_discount_pct || '10')}">
-                            </div>
-                            <div>
-                                <label>报价前缀</label>
-                                <input type="text" id="quote-prefix" value="${esc(profile.rules.quote_prefix || 'QP-')}">
-                            </div>
-                        </div>
-                        <small style="color: var(--muted); display: block; margin-top: 10px;">法律条款不会被 AI 导入覆盖 Legal terms are never AI-overwritten.</small>
-                    </div>
-                `;
-                
-                // Build catalog card
-                let catalogRows = '';
-                if (profile.catalog && Array.isArray(profile.catalog)) {
-                    for (let i = 0; i < profile.catalog.length; i++) {
-                        const item = profile.catalog[i];
-                        const discountsStr = serializeDiscounts(item.volume_discounts || []);
-                        catalogRows += `
-                            <tr>
-                                <td><input type="text" value="${esc(item.sku)}" data-field="sku" data-index="${i}"></td>
-                                <td><input type="text" value="${esc(item.name_en)}" data-field="name_en" data-index="${i}"></td>
-                                <td><input type="text" value="${esc(item.name_zh)}" data-field="name_zh" data-index="${i}"></td>
-                                <td><input type="text" value="${esc(item.unit)}" data-field="unit" data-index="${i}"></td>
-                                <td><input type="text" value="${esc(item.unit_zh)}" data-field="unit_zh" data-index="${i}"></td>
-                                <td><input type="text" value="${esc(item.unit_price_usd)}" data-field="unit_price_usd" data-index="${i}"></td>
-                                <td><input type="text" value="${esc(discountsStr)}" data-field="discounts" data-index="${i}"></td>
-                                <td><input type="hidden" value="${esc(item.description_en || '')}" data-field="description_en" data-index="${i}"></td>
-                                <td><input type="hidden" value="${esc(item.description_zh || '')}" data-field="description_zh" data-index="${i}"></td>
-                                <td><button class="delete-btn" data-index="${i}">删除</button></td>
-                            </tr>
-                        `;
-                    }
-                }
-                
-                let catalogCard = `
-                    <div class="card">
-                        <h2 class="card-title">产品目录 Catalog</h2>
-                        <table class="catalog-table">
-                            <thead>
-                                <tr>
-                                    <th>SKU</th>
-                                    <th>名称 (EN)</th>
-                                    <th>名称 (ZH)</th>
-                                    <th>单位</th>
-                                    <th>单位 (ZH)</th>
-                                    <th>单价 (USD)</th>
-                                    <th>折扣</th>
-                                    <th style="display:none;">Description EN</th>
-                                    <th style="display:none;">Description ZH</th>
-                                    <th>操作</th>
-                                </tr>
-                            </thead>
-                            <tbody id="catalog-tbody">
-                                ${catalogRows}
-                            </tbody>
-                        </table>
-                        <button class="add-product-btn" id="add-product-btn">＋ 添加产品 Add product</button>
-                    </div>
-                `;
-                
-                container.innerHTML = importCard + companyCard + termsCard + catalogCard;
-                
-                // Setup event listeners for import
-                document.getElementById('import-btn').addEventListener('click', async () => {
-                    const urlInput = document.getElementById('import-url');
-                    const statusDiv = document.getElementById('import-status');
-                    const url = urlInput.value.trim();
-                    
-                    if (!url) {
-                        statusDiv.innerHTML = '<div class="error-message">请输入有效的 URL</div>';
-                        return;
-                    }
-                    
-                    statusDiv.innerHTML = '<div class="warning-banner">Qwen 正在阅读网站…</div>';
-                    
-                    try {
-                        const response = await fetchWithTimeout(`${API}/api/profile/import`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ url: url })
-                        }, 90000); // 90 second timeout for import
-                        
-                        if (!response.ok) {
-                            const errorText = await response.text();
-                            statusDiv.innerHTML = `<div class="error-message">导入失败: ${esc(errorText)}</div>`;
-                            return;
-                        }
-                        
-                        const result = await response.json();
-                        
-                        // Update company info
-                        document.getElementById('name-en').value = result.draft.seller.name_en || '';
-                        document.getElementById('name-zh').value = result.draft.seller.name_zh || '';
-                        document.getElementById('jurisdiction-en').value = result.draft.seller.jurisdiction_en || '';
-                        document.getElementById('jurisdiction-zh').value = result.draft.seller.jurisdiction_zh || '';
-                        document.getElementById('website').value = result.draft.seller.website || '';
-                        document.getElementById('email').value = result.draft.seller.email || '';
-                        document.getElementById('description').value = result.draft.seller.description || '';
-                        
-                        // Update catalog
-                        const tbody = document.getElementById('catalog-tbody');
-                        tbody.innerHTML = '';
-                        if (result.draft.catalog && Array.isArray(result.draft.catalog)) {
-                            for (let i = 0; i < result.draft.catalog.length; i++) {
-                                const item = result.draft.catalog[i];
-                                const discountsStr = serializeDiscounts(item.volume_discounts || []);
-                                const newRow = document.createElement('tr');
-                                newRow.innerHTML = `
-                                    <td><input type="text" value="${esc(item.sku)}" data-field="sku" data-index="${i}"></td>
-                                    <td><input type="text" value="${esc(item.name_en)}" data-field="name_en" data-index="${i}"></td>
-                                    <td><input type="text" value="${esc(item.name_zh)}" data-field="name_zh" data-index="${i}"></td>
-                                    <td><input type="text" value="${esc(item.unit)}" data-field="unit" data-index="${i}"></td>
-                                    <td><input type="text" value="${esc(item.unit_zh)}" data-field="unit_zh" data-index="${i}"></td>
-                                    <td><input type="text" value="${esc(item.unit_price_usd)}" data-field="unit_price_usd" data-index="${i}"></td>
-                                    <td><input type="text" value="${esc(discountsStr)}" data-field="discounts" data-index="${i}"></td>
-                                    <td><input type="hidden" value="${esc(item.description_en || '')}" data-field="description_en" data-index="${i}"></td>
-                                    <td><input type="hidden" value="${esc(item.description_zh || '')}" data-field="description_zh" data-index="${i}"></td>
-                                    <td><button class="delete-btn" data-index="${i}">删除</button></td>
-                                `;
-                                tbody.appendChild(newRow);
-                            }
-                        }
-                        
-                        // Show note
-                        statusDiv.innerHTML = `<div class="success-message">${esc(result.note)}</div>`;
-                        
-                        // Show warnings if needed
-                        if (result.needs_price && result.needs_price.length > 0) {
-                            const warningItems = result.needs_price.map(item => esc(item)).join(', ');
-                            statusDiv.innerHTML += `<div class="warning-banner">以下项目需要设置价格: ${warningItems}</div>`;
-                        }
-                    } catch (error) {
-                        statusDiv.innerHTML = `<div class="error-message">导入失败: ${esc(error.message)}</div>`;
-                    }
-                });
-                
-                // Setup event listeners for catalog
-                document.getElementById('add-product-btn').addEventListener('click', () => {
-                    const tbody = document.getElementById('catalog-tbody');
-                    const index = tbody.children.length;
-                    const newRow = document.createElement('tr');
-                    newRow.innerHTML = `
-                        <td><input type="text" data-field="sku" data-index="${index}"></td>
-                        <td><input type="text" data-field="name_en" data-index="${index}"></td>
-                        <td><input type="text" data-field="name_zh" data-index="${index}"></td>
-                        <td><input type="text" data-field="unit" data-index="${index}"></td>
-                        <td><input type="text" data-field="unit_zh" data-index="${index}"></td>
-                        <td><input type="text" data-field="unit_price_usd" data-index="${index}"></td>
-                        <td><input type="text" data-field="discounts" data-index="${index}"></td>
-                        <td><input type="hidden" value="" data-field="description_en" data-index="${index}"></td>
-                        <td><input type="hidden" value="" data-field="description_zh" data-index="${index}"></td>
-                        <td><button class="delete-btn" data-index="${index}">删除</button></td>
-                    `;
-                    tbody.appendChild(newRow);
-                    
-                    // Update indices for all rows
-                    updateCatalogIndices();
-                });
-                
-                // Use event delegation for delete buttons
-                document.getElementById('catalog-tbody').addEventListener('click', (e) => {
-                    if (e.target.classList.contains('delete-btn')) {
-                        const index = parseInt(e.target.getAttribute('data-index'));
-                        const rows = document.querySelectorAll('#catalog-tbody tr');
-                        rows[index].remove();
-                        
-                        // Update indices for remaining rows
-                        updateCatalogIndices();
-                    }
-                });
-                
-                // Setup save button
-                const saveBar = document.createElement('div');
-                saveBar.className = 'sticky-bottom-bar';
-                saveBar.innerHTML = `
-                    <button class="btn" id="save-settings-btn">保存配置 Save Settings</button>
-                    <div class="demo-note">演示环境:配置保存在当前服务实例,实例回收后恢复默认档案。Demo: settings persist on the warm instance only.</div>
-                `;
-                container.appendChild(saveBar);
-                
-                document.getElementById('save-settings-btn').addEventListener('click', async () => {
-                    // Build profile object from form values
-                    const profileToSave = {
-                        seller: {
-                            name_en: document.getElementById('name-en').value,
-                            name_zh: document.getElementById('name-zh').value,
-                            jurisdiction_en: document.getElementById('jurisdiction-en').value,
-                            jurisdiction_zh: document.getElementById('jurisdiction-zh').value,
-                            website: document.getElementById('website').value,
-                            email: document.getElementById('email').value,
-                            description: document.getElementById('description').value
-                        },
-                        terms: {
-                            payment_en: document.getElementById('payment-en').value,
-                            payment_zh: document.getElementById('payment-zh').value,
-                            legal_en: document.getElementById('legal-en').value,
-                            legal_zh: document.getElementById('legal-zh').value,
-                            tax_note_en: document.getElementById('tax-en').value,
-                            tax_note_zh: document.getElementById('tax-zh').value
-                        },
-                        rules: {
-                            quote_validity_days: parseInt(document.getElementById('validity-days').value) || 30,
-                            urgent_deadline_days: parseInt(document.getElementById('urgent-days').value) || 7,
-                            wire_threshold_usd: document.getElementById('wire-threshold').value,
-                            max_extra_discount_pct: document.getElementById('max-discount').value,
-                            quote_prefix: document.getElementById('quote-prefix').value
-                        },
-                        catalog: []
-                    };
-                    
-                    // Get catalog items
-                    const rows = document.querySelectorAll('#catalog-tbody tr');
-                    let defaultedFields = [];
-                    for (let i = 0; i < rows.length; i++) {
-                        const inputs = rows[i].querySelectorAll('input');
-                        let unitPriceValue = inputs[5].value;
-                        if (unitPriceValue === '' || isNaN(parseFloat(unitPriceValue))) {
-                            unitPriceValue = '0.00';
-                            defaultedFields.push(`行 ${i+1} 单价`);
-                        }
-                        const item = {
-                            sku: inputs[0].value,
-                            name_en: inputs[1].value,
-                            name_zh: inputs[2].value,
-                            unit: inputs[3].value,
-                            unit_zh: inputs[4].value,
-                            unit_price_usd: parseFloat(unitPriceValue),
-                            volume_discounts: parseDiscounts(inputs[6].value),
-                            description_en: inputs[7].value,
-                            description_zh: inputs[8].value
-                        };
-                        
-                        profileToSave.catalog.push(item);
-                    }
-                    
-                    try {
-                        const response = await fetchWithTimeout(`${API}/api/profile`, {
-                            method: 'PUT',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(profileToSave)
-                        });
-                        
-                        if (!response.ok) {
-                            const errorText = await response.text();
-                            document.getElementById('import-status').innerHTML = `<div class="error-message">保存失败: ${esc(errorText)}</div>`;
-                            return;
-                        }
-                        
-                        let successMessage = '<div class="success-message">已保存 Saved ✓</div>';
-                        if (defaultedFields.length > 0) {
-                            successMessage += `<div class="warning-banner">注意:以下字段为空或无效,已设为默认值: ${defaultedFields.join(', ')}</div>`;
-                        }
-                        document.getElementById('import-status').innerHTML = successMessage;
-                    } catch (error) {
-                        document.getElementById('import-status').innerHTML = `<div class="error-message">保存失败: ${esc(error.message)}</div>`;
-                    }
-                });
-                
-            } catch (error) {
-                if (myToken !== navToken) return;
-                container.innerHTML = `
-                    <div class="warning-banner">
-                        <span>API 连接失败,请稍后重试 (cold start may take ~5s)</span>
-                        <button class="btn" onclick="renderSettings()">重试 Retry</button>
-                    </div>
-                `;
-            }
-        }
-        
-        // Update indices for catalog table rows
-        function updateCatalogIndices() {
-            const rows = document.querySelectorAll('#catalog-tbody tr');
-            for (let i = 0; i < rows.length; i++) {
-                const inputs = rows[i].querySelectorAll('input');
-                inputs.forEach(input => {
-                    input.setAttribute('data-index', i);
-                });
-                const deleteBtn = rows[i].querySelector('.delete-btn');
-                deleteBtn.setAttribute('data-index', i);
-            }
-        }
-        
-        // Dashboard view
-        async function renderDashboard() {
-            const myToken = ++navToken;
-            currentRoute = 'dashboard';
-            const container = document.getElementById('main-container');
-            
-            // Show loading state with backoff
-            container.innerHTML = `
-                <div class="card">
-                    <h2 class="card-title">服务冷启动中,请稍候… cold start…</h2>
-                </div>
-            `;
-            
-            // Try up to 4 times with backoff (3 retries): 2s, 5s, 10s
-            const delays = [2000, 5000, 10000];
-            let lastError = null;
-            
-            for (let i = 0; i <= delays.length; i++) {
-                try {
-                    const response = await fetchWithTimeout(`${API}/api/bootstrap`);
-                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                    
-                    const data = await response.json();
-                    if (myToken !== navToken) return;
-                    renderDashboardWithData(container, data);
-                    return;
-                } catch (error) {
-                    lastError = error;
-                    if (i < delays.length) {
-                        await new Promise(resolve => setTimeout(resolve, delays[i]));
-                    }
-                }
-            }
-            
-            // If all retries failed
-            if (myToken !== navToken) return;
-            container.innerHTML = `
-                <div class="warning-banner">
-                    <span>API 连接失败,请稍后重试 (cold start may take ~5s)</span>
-                    <button class="btn" onclick="renderDashboard()">重试 Retry</button>
-                </div>
-            `;
-        }
-        
-        function renderDashboardWithData(container, data) {
-            let inboxCard = `
-                <div class="card">
-                    <h2 class="card-title">收件箱 Inbox</h2>
-                    <div style="margin-bottom: 16px;">
-                        <label>Sample emails:</label><br>
-            `;
-            
-            for (const sampleName of data.samples) {
-                inboxCard += `<button class="btn" onclick="loadSample('${esc(sampleName)}')" style="margin-right: 8px; margin-bottom: 8px;">${esc(sampleName)}</button>`;
-            }
-            
-            inboxCard += `
-                    </div>
-                    <textarea id="email-textarea" rows="10" placeholder="Paste email text here or load a sample"></textarea>
-                    <button class="btn" onclick="submitEmail()" style="margin-top: 10px;">启动自动报价 Run Autopilot</button>
-                    <div id="submit-error" class="error-message"></div>
-                </div>
-            `;
-            
-            let activeCard = `
-                <div class="card">
-                    <h2 class="card-title">进行中 Active</h2>
-            `;
-            
-            if (data.submissions.length > 0) {
-                activeCard += `
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>SID</th>
-                                <th>Company</th>
-                                <th>Quote #</th>
-                                <th>Total</th>
-                                <th>Status</th>
-                                <th>Created</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                `;
-                
-                for (const sub of data.submissions) {
-                    activeCard += `
-                        <tr>
-                            <td><a href="#/s/${esc(sub.sid)}">${esc(sub.sid)}</a></td>
-                            <td>${esc(sub.company || 'N/A')}</td>
-                            <td>${esc(sub.quote_number || 'N/A')}</td>
-                            <td>${formatCurrency(sub.total_usd, '$')} / ${formatCurrency(sub.total_cny, '¥')}</td>
-                            <td><span class="status-badge ${getStatusClass(sub.status)}">${esc(sub.status)}</span></td>
-                            <td>${formatDate(sub.created_at)}</td>
-                        </tr>
-                    `;
-                }
-                
-                activeCard += `
-                        </tbody>
-                    </table>
-                `;
-            } else {
-                activeCard += '<div class="empty-state">No active submissions</div>';
-            }
-            
-            activeCard += '</div>';
-            
-            let archiveCard = `
-                <div class="card">
-                    <h2 class="card-title">历史运行 Archive</h2>
-            `;
-            
-            if (data.archived.length > 0) {
-                archiveCard += `
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Run ID</th>
-                                <th>Quote #</th>
-                                <th>Company</th>
-                                <th>Total</th>
-                                <th>Decision</th>
-                                <th>Time</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                `;
-                
-                for (const run of data.archived) {
-                    const hasHtml = run.artifacts.some(a => a.kind === 'quote_html');
-                    const quoteAction = hasHtml 
-                        ? `<button class="btn" onclick="fetchAndOpenArtifact('${esc(run.run_id)}', '${esc(run.quote_number)}.html')">报价单 Quote</button>`
-                        : 'N/A';
-                    
-                    archiveCard += `
-                        <tr>
-                            <td>${esc(run.run_id)}</td>
-                            <td>${esc(run.quote_number || 'N/A')}</td>
-                            <td>${esc(run.company || 'N/A')}</td>
-                            <td>${formatCurrency(run.total_usd, '$')} / ${formatCurrency(run.total_cny, '¥')}</td>
-                            <td><span class="status-badge ${getStatusClass(run.decision || 'N/A')}">${esc(run.decision || 'N/A')}</span></td>
-                            <td>${formatDate(run.created_at)}</td>
-                            <td>${quoteAction}</td>
-                        </tr>
-                    `;
-                }
-                
-                archiveCard += `
-                        </tbody>
-                    </table>
-                `;
-            } else {
-                archiveCard += '<div class="empty-state">No archived runs</div>';
-            }
-            
-            archiveCard += '</div>';
-            
-            container.innerHTML = inboxCard + activeCard + archiveCard;
-            
-            // Start polling for active submissions
-            const pollTimer = setInterval(async () => {
-                if (currentRoute !== 'dashboard') return;
-                
-                try {
-                    const response = await fetchWithTimeout(`${API}/api/bootstrap`);
-                    if (!response.ok) return;
-                    
-                    const newData = await response.json();
-                    const activeSubs = newData.submissions.filter(s => s.status === 'running' || s.status === 'awaiting_approval');
-                    
-                    if (activeSubs.length > 0) {
-                        // Re-render the active section
-                        let activeSection = `
-                            <div class="card">
-                                <h2 class="card-title">进行中 Active</h2>
-                                <table>
-                                    <thead>
-                                        <tr>
-                                            <th>SID</th>
-                                            <th>Company</th>
-                                            <th>Quote #</th>
-                                            <th>Total</th>
-                                            <th>Status</th>
-                                            <th>Created</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                        `;
-                        
-                        for (const sub of activeSubs) {
-                            activeSection += `
-                                <tr>
-                                    <td><a href="#/s/${esc(sub.sid)}">${esc(sub.sid)}</a></td>
-                                    <td>${esc(sub.company || 'N/A')}</td>
-                                    <td>${esc(sub.quote_number || 'N/A')}</td>
-                                    <td>${formatCurrency(sub.total_usd, '$')} / ${formatCurrency(sub.total_cny, '¥')}</td>
-                                    <td><span class="status-badge ${getStatusClass(sub.status)}">${esc(sub.status)}</span></td>
-                                    <td>${formatDate(sub.created_at)}</td>
-                                </tr>
-                            `;
-                        }
-                        
-                        activeSection += `
-                                    </tbody>
-                                </table>
-                            </div>
-                        `;
-                        
-                        const activeCardElement = container.querySelector('.card:nth-child(2)');
-                        if (activeCardElement) {
-                            activeCardElement.outerHTML = activeSection;
-                        }
-                    }
-                } catch (err) {
-                    console.error('Polling error:', err);
-                }
-            }, 5000);
-            
-            activeTimers.push(pollTimer);
-        }
-        
-        // Submission view
-        async function renderSubmission(sid) {
-            const myToken = ++navToken;
-            currentRoute = 'submission';
-            const container = document.getElementById('main-container');
-            
-            try {
-                const response = await fetchWithTimeout(`${API}/api/s/${sid}`);
-                if (!response.ok) {
-                    if (response.status === 404) {
-                        container.innerHTML = `
-                            <a href="#/" class="back-link">← 返回 Dashboard</a>
-                            <div class="card">
-                                <h2 class="card-title">会话已过期 Session Expired</h2>
-                                <p>该运行的内存状态已随演示实例回收 (serverless demo)。请返回 Dashboard 重新提交。</p>
-                                <p>This run's in-memory state was recycled — please submit again.</p>
-                                <a href="#/" class="btn">← 返回 Dashboard</a>
-                            </div>
-                        `;
-                        return;
-                    }
-                    throw new Error(`HTTP ${response.status}`);
-                }
-                
-                if (myToken !== navToken) return;
-                
-                const data = await response.json();
-                const s = data.s;
-                
-                // Stage checklist
-                const stages = ['intake', 'fx', 'pricing', 'risk_rules', 'risk_llm_sweep', 'drafting'];
-                const stageNames = {
-                    'intake': '解析询价',
-                    'fx': '实时汇率',
-                    'pricing': '目录定价',
-                    'risk_rules': '规则风控',
-                    'risk_llm_sweep': 'AI 风控扫描',
-                    'drafting': '双语起草'
-                };
-                
-                let stageList = '<div class="card"><h2 class="card-title">处理阶段 Processing Stages</h2>';
-                
-                for (const stage of stages) {
-                    const completed = s.stages && s.stages.includes(stage);
-                    const icon = completed ? '✅' : '⏳';
-                    stageList += `<div class="stage-item ${completed ? 'completed' : ''}" id="stage-${esc(stage)}"><span class="stage-icon">${icon}</span><span class="stage-text">${esc(stageNames[stage] || stage)}</span></div>`;
-                }
-                
-                stageList += '</div>';
-                
-                let content = '';
-                
-                if (s.status === 'running') {
-                    content = `
-                        <div class="card">
-                            <h2 class="card-title">自动驾驶运行中… Autopilot running…</h2>
-                            <p>系统正在处理您的请求，请稍候...</p>
-                        </div>
-                    `;
-                    
-                    // Poll for state updates with resilience
-                    let consecutiveFailures = 0;
-                    const maxConsecutiveFailures = 20;
-                    let reconnectBanner = null;
-                    
-                    const pollTimer = setInterval(async () => {
-                        if (currentRoute !== 'submission') return;
-                        
-                        try {
-                            const stateResponse = await fetchWithTimeout(`${API}/s/${sid}/state`);
-                            if (!stateResponse.ok) {
-                                throw new Error(`HTTP ${stateResponse.status}`);
-                            }
-                            
-                            const stateData = await stateResponse.json();
-                            
-                            // Clear any reconnect banner on success
-                            if (consecutiveFailures > 0) {
-                                consecutiveFailures = 0;
-                                if (reconnectBanner) {
-                                    reconnectBanner.remove();
-                                    reconnectBanner = null;
-                                }
-                            }
-                            
-                            // Update stage checklist based on new stages
-                            for (const stage of stages) {
-                                const completed = stateData.stages.includes(stage);
-                                const stageElement = document.getElementById(`stage-${esc(stage)}`);
-                                if (stageElement) {
-                                    stageElement.classList.toggle('completed', completed);
-                                    const iconSpan = stageElement.querySelector('.stage-icon');
-                                    const textSpan = stageElement.querySelector('.stage-text');
-                                    if (iconSpan && textSpan) {
-                                        iconSpan.textContent = completed ? '✅' : '⏳';
-                                        textSpan.textContent = stageNames[stage] || stage;
-                                    }
-                                }
-                            }
-                            
-                            // If status changed, reload the full view
-                            if (stateData.status !== s.status) {
-                                clearInterval(pollTimer);
-                                renderSubmission(sid);
-                            }
-                        } catch (err) {
-                            console.error('Polling error:', err);
-                            
-                            // Increment failure counter
-                            consecutiveFailures++;
-                            
-                            // Show reconnect banner if not already shown
-                            if (!reconnectBanner && consecutiveFailures <= maxConsecutiveFailures) {
-                                reconnectBanner = document.createElement('div');
-                                reconnectBanner.className = 'reconnect-banner';
-                                reconnectBanner.textContent = '连接中断,自动重试中… reconnecting…';
-                                
-                                const firstCard = document.querySelector('.card');
-                                if (firstCard) {
-                                    firstCard.parentNode.insertBefore(reconnectBanner, firstCard);
-                                }
-                            }
-                            
-                            // Stop polling after max consecutive failures
-                            if (consecutiveFailures >= maxConsecutiveFailures) {
-                                clearInterval(pollTimer);
-                                if (reconnectBanner) {
-                                    reconnectBanner.remove();
-                                }
-                                const errorCard = document.createElement('div');
-                                errorCard.className = 'card';
-                                errorCard.innerHTML = `
-                                    <h2 class="card-title">连接超时 Connection Timeout</h2>
-                                    <p>无法获取最新状态，已停止轮询。请刷新页面或返回 Dashboard。</p>
-                                `;
-                                const container = document.getElementById('main-container');
-                                container.appendChild(errorCard);
-                            }
-                        }
-                    }, 1500);
-                    
-                    activeTimers.push(pollTimer);
-                    
-                } else if (s.status === 'awaiting_approval') {
-                    let riskFlags = '';
-                    if (s.risk_flags && s.risk_flags.length > 0) {
-                        riskFlags = '<div class="card"><h2 class="card-title">风险标记 Risk Flags</h2>';
-                        for (const flag of s.risk_flags) {
-                            riskFlags += `
-                                <div style="margin-bottom: 10px;">
-                                    <span class="${getSeverityClass(flag.severity)}">${esc(flag.code)}</span>
-                                    <span style="margin-left: 8px;">${esc(flag.message_zh)}</span>
-                                    <small style="display: block; color: var(--muted);">${esc(flag.message_en)}</small>
-                                </div>
-                            `;
-                        }
-                        riskFlags += '</div>';
-                    }
-                    
-                    let summary = '';
-                    if (data.summary) {
-                        summary = `<div class="card"><h2 class="card-title">摘要 Summary</h2><pre>${esc(data.summary)}</pre></div>`;
-                    }
-                    
-                    let preview = '';
-                    try {
-                        const previewResponse = await fetchWithTimeout(`${API}/s/${sid}/preview`);
-                        if (previewResponse.ok) {
-                            const previewHtml = await previewResponse.text();
-                            preview = `<div class="card"><h2 class="card-title">报价预览 Quote Preview</h2><iframe class="preview-frame" srcdoc="${esc(previewHtml)}"></iframe></div>`;
-                        }
-                    } catch (err) {
-                        console.error('Preview fetch error:', err);
-                    }
-                    
-                    let blockWarning = '';
-                    let approveDisabled = false;
-                    if (s.risk_flags && s.risk_flags.some(f => f.severity === 'block')) {
-                        blockWarning = '<div class="block-warning">⛔ 存在阻断级风险,不可批准 Blocking flag — approval disabled</div>';
-                        approveDisabled = true;
-                    }
-                    
-                    content = `
-                        ${riskFlags}
-                        ${summary}
-                        ${preview}
-                        <div class="card decision-bar">
-                            <h2 class="card-title">决策 Decision</h2>
-                            <textarea id="decision-notes" class="notes-input" rows="3" placeholder="审批备注 Notes"></textarea>
-                            <button class="btn btn-approve" ${approveDisabled ? 'disabled' : ''} onclick="makeDecision('${esc(sid)}', 'approve')">批准并生成 Approve & Render</button>
-                            <button class="btn btn-reject" onclick="makeDecision('${esc(sid)}', 'reject')">拒绝 Reject</button>
-                            <div id="decision-error" class="error-message"></div>
-                            ${blockWarning}
-                        </div>
-                    `;
-                    
-                } else if (s.status === 'approved' || s.status === 'rejected') {
-                    let artifacts = '';
-                    if (s.artifacts && s.artifacts.length > 0) {
-                        artifacts = '<div class="artifact-list"><h3>交付物 Artifacts</h3>';
-                        for (const artifact of s.artifacts) {
-                            let label = artifact.kind;
-                            switch (artifact.kind) {
-                                case 'quote_html':
-                                    label = '报价单 Quote HTML';
-                                    break;
-                                case 'reply_email':
-                                    label = '回复邮件 Reply Email';
-                                    break;
-                                case 'quote_json':
-                                    label = 'Quote JSON';
-                                    break;
-                                case 'inquiry':
-                                    label = 'Inquiry JSON';
-                                    break;
-                                case 'summary':
-                                    label = 'Summary';
-                                    break;
-                            }
-                            artifacts += `<button class="artifact-btn" onclick="fetchAndOpenArtifact('${esc(artifact.run_id)}', '${esc(artifact.filename)}')">${esc(label)}</button>`;
-                        }
-                        artifacts += '</div>';
-                    }
-                    
-                    content = `
-                        <div class="card">
-                            <h2 class="card-title">结果 Result</h2>
-                            <p>状态 Status: <span class="status-badge ${getStatusClass(s.status)}">${esc(s.status)}</span></p>
-                            ${artifacts}
-                            ${s.tokens ? `<div class="tokens-info">本次运行消耗 ${s.tokens} tokens</div>` : ''}
-                        </div>
-                    `;
-                    
-                } else if (s.status === 'failed') {
-                    content = `
-                        <div class="card">
-                            <h2 class="card-title">错误 Error</h2>
-                            <div style="background-color: #fee2e2; padding: 16px; border-radius: 6px; color: #b91c1c;">
-                                ${esc(s.error)}
-                            </div>
-                        </div>
-                    `;
-                }
-                
-                container.innerHTML = `
-                    <a href="#/" class="back-link">← 返回 Dashboard</a>
-                    ${stageList}
-                    ${content}
-                `;
-                
-            } catch (error) {
-                if (myToken !== navToken) return;
-                container.innerHTML = `
-                    <a href="#/" class="back-link">← 返回 Dashboard</a>
-                    <div class="warning-banner">
-                        <span>API 连接失败,请稍后重试 (cold start may take ~5s)</span>
-                        <button class="btn" onclick="renderSubmission('${esc(sid)}')">重试 Retry</button>
-                    </div>
-                `;
-            }
-        }
-        
-        // Event handlers
-        async function loadSample(name) {
-            try {
-                const response = await fetchWithTimeout(`${API}/sample/${encodeURIComponent(name)}`);
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                
-                const data = await response.json();
-                document.getElementById('email-textarea').value = data.text;
-            } catch (error) {
-                console.error('Error loading sample:', error);
-                document.getElementById('submit-error').textContent = 'Failed to load sample';
-            }
-        }
-        
-        async function submitEmail() {
-            const textarea = document.getElementById('email-textarea');
-            const errorDiv = document.getElementById('submit-error');
-            
-            if (!textarea.value.trim()) {
-                errorDiv.textContent = 'Please enter email text';
-                return;
-            }
-            
-            try {
-                const response = await fetchWithTimeout(`${API}/api/submit`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ email_text: textarea.value })
-                });
-                
-                if (response.status === 422) {
-                    errorDiv.textContent = 'Email text too short';
-                    return;
-                }
-                
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                
-                const data = await response.json();
-                window.location.hash = `#/s/${data.sid}`;
-            } catch (error) {
-                console.error('Submit error:', error);
-                errorDiv.textContent = 'Failed to submit email';
-            }
-        }
-        
-        async function makeDecision(sid, action) {
-            const notesInput = document.getElementById('decision-notes');
-            const errorDiv = document.getElementById('decision-error');
-            
-            try {
-                const response = await fetchWithTimeout(`${API}/api/s/${sid}/decision`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        action: action,
-                        notes: notesInput.value.trim() || null
-                    })
-                });
-                
-                if (response.status === 409) {
-                    errorDiv.textContent = 'Conflict - already decided';
-                    return;
-                }
-                
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                
-                // Reload the submission view
-                renderSubmission(sid);
-            } catch (error) {
-                console.error('Decision error:', error);
-                errorDiv.textContent = 'Failed to make decision';
-            }
-        }
-        
-        async function fetchAndOpenArtifact(runId, filename) {
-            try {
-                const response = await fetchWithTimeout(`${API}/artifacts/${encodeURIComponent(runId)}/${encodeURIComponent(filename)}`);
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                
-                const blob = await response.blob();
-                const url = URL.createObjectURL(blob);
-                window.open(url, '_blank');
-                
-                // Clean up the URL after some time
-                setTimeout(() => URL.revokeObjectURL(url), 10000);
-            } catch (error) {
-                console.error('Artifact fetch error:', error);
-                alert('Failed to fetch artifact');
-            }
-        }
-        
-        // Initialize
-        window.addEventListener('hashchange', handleHashChange);
-        handleHashChange(); // Initial render
-    </script>
+<header class="top">
+  <div class="top-in">
+    <a class="brand" href="#/"><span class="logo">QP</span><b>QuotePilot<i id="brandTag"></i></b></a>
+    <nav class="nav">
+      <a href="#/" data-nav="dash" id="navDash"></a>
+      <a href="#/settings" data-nav="settings" id="navSettings"></a>
+    </nav>
+  </div>
+</header>
+
+<main><div class="wrap" id="app"></div></main>
+
+<footer class="foot">
+  <div class="foot-in">
+    <span id="footBrand"></span>
+    <span>Backend: Alibaba Cloud Function Compute (ap-southeast-1)</span>
+    <span>Rates by <a href="https://www.exchangerate-api.com" target="_blank" rel="noopener">Exchange Rate API</a> (https://www.exchangerate-api.com)</span>
+  </div>
+</footer>
+
+<div id="toasts"></div>
+
+<script>
+"use strict";
+/* ================= Core ================= */
+const API = localStorage.getItem("QP_API") || "https://quotepilot-kafogbnbjc.ap-southeast-1.fcapp.run";
+const $ = (s, el) => (el || document).querySelector(s);
+const $$ = (s, el) => Array.from((el || document).querySelectorAll(s));
+const app = document.getElementById("app");
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+/* ---- language ---- */
+let LANG = localStorage.getItem("QP_LANG") || "en";
+if (LANG !== "zh" && LANG !== "en") LANG = "en";
+const L = (en, zh) => LANG === "zh" ? zh : en;
+function setLang(v) {
+  LANG = v;
+  localStorage.setItem("QP_LANG", v);
+  applyChrome();
+  route();
+}
+function applyChrome() {
+  document.documentElement.lang = LANG === "zh" ? "zh-CN" : "en";
+  $("#brandTag").textContent = L("Quote autopilot", "报价领航");
+  $("#navDash").textContent = L("Dashboard", "工作台");
+  $("#navSettings").textContent = L("Settings", "设置");
+  $("#footBrand").textContent = L("QuotePilot · Agent powered by Qwen", "QuotePilot · 智能体由通义千问驱动");
+}
+
+async function jfetch(path, opts) {
+  const o = Object.assign({ headers: { "Content-Type": "application/json" } }, opts || {});
+  const r = await fetch(API + path, o);
+  const txt = await r.text();
+  let body = null;
+  try { body = txt ? JSON.parse(txt) : null; } catch (e) { body = txt; }
+  if (!r.ok) {
+    const msg = (body && typeof body === "object" && (body.detail || body.error || body.message)) || ("HTTP " + r.status);
+    const err = new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+    err.status = r.status; err.body = body;
+    throw err;
+  }
+  return body;
+}
+
+const fmtUSD = n => n == null ? "—" : "$" + Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmtCNY = n => n == null ? "—" : "¥" + Number(n).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+function fmtTime(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d)) return String(iso).slice(0, 16);
+  const diff = (Date.now() - d.getTime()) / 1000;
+  if (diff > -30 && diff < 60) return L("just now", "刚刚");
+  if (diff < 3600 && diff > 0) return Math.floor(diff / 60) + L(" min ago", " 分钟前");
+  if (diff < 86400 && diff > 0) return Math.floor(diff / 3600) + L(" h ago", " 小时前");
+  return (d.getMonth() + 1) + "-" + String(d.getDate()).padStart(2, "0") + " " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+}
+
+const STATUS = {
+  running:            { en: "Running",           zh: "运行中",  cls: "running"  },
+  awaiting_approval:  { en: "Awaiting approval",  zh: "待审批",  cls: "awaiting" },
+  approved:           { en: "Approved",           zh: "已批准",  cls: "approved" },
+  rejected:           { en: "Rejected",           zh: "已驳回",  cls: "rejected" },
+  failed:             { en: "Failed",             zh: "失败",    cls: "failed"   }
+};
+function pill(st) {
+  const m = STATUS[st] || { en: st || "Unknown", zh: st || "未知", cls: "unknown" };
+  return `<span class="pill p-${m.cls}"><i></i>${esc(L(m.en, m.zh))}</span>`;
+}
+
+const STAGES = [
+  { key: "intake",         en: "Parse inquiry",   zh: "解析询价"    },
+  { key: "fx",             en: "Live USD/CNY FX", zh: "实时汇率"    },
+  { key: "pricing",        en: "Catalog pricing", zh: "目录定价"    },
+  { key: "risk_rules",     en: "Rule-based risk", zh: "规则风控"    },
+  { key: "risk_llm_sweep", en: "AI risk sweep",   zh: "AI 风控扫描" },
+  { key: "drafting",       en: "Bilingual draft", zh: "双语起草"    }
+];
+const SEV = {
+  info:  { en: "INFO",  zh: "提示" },
+  warn:  { en: "WARN",  zh: "注意" },
+  block: { en: "BLOCK", zh: "阻断" }
+};
+
+function toast(msg, kind) {
+  const box = document.getElementById("toasts");
+  const t = document.createElement("div");
+  t.className = "toast" + (kind ? " t-" + kind : "");
+  t.textContent = msg;
+  box.appendChild(t);
+  setTimeout(() => { t.style.transition = "opacity .3s"; t.style.opacity = "0"; setTimeout(() => t.remove(), 320); }, 3400);
+}
+
+/* ================= Router ================= */
+let EPOCH = 0;
+function setNav(name) {
+  $$(".nav a").forEach(a => a.classList.toggle("on", a.dataset.nav === name));
+}
+function route() {
+  const ep = ++EPOCH;
+  const h = location.hash || "#/";
+  window.scrollTo(0, 0);
+  if (h.startsWith("#/s/")) viewRun(decodeURIComponent(h.slice(4).split("?")[0]), ep);
+  else if (h.startsWith("#/settings")) viewSettings(ep);
+  else viewDash(ep);
+}
+window.addEventListener("hashchange", route);
+
+function errorCard(title, e, retryHash) {
+  return `<section class="card center-card view">
+    <div class="glyph" style="background:var(--bad-bg);color:var(--bad)">!</div>
+    <h2>${esc(title)}</h2>
+    <p>${esc(e && e.message || "")}<br><span class="mono" style="font-size:11px;color:var(--faint)">API: ${esc(API)}</span></p>
+    <button class="btn btn-pri" onclick="location.hash='${retryHash || "#/"}';window.dispatchEvent(new HashChangeEvent('hashchange'))">${esc(L("Retry", "重试"))}</button>
+  </section>`;
+}
+
+/* ================= Dashboard ================= */
+let BOOT = null;
+
+async function fetchBootstrap() {
+  let lastErr;
+  for (let i = 0; i < 3; i++) {
+    try { BOOT = await jfetch("/api/bootstrap"); return BOOT; }
+    catch (e) { lastErr = e; if (i < 2) await sleep(2000 * (i + 1)); }
+  }
+  throw lastErr;
+}
+
+async function viewDash(ep) {
+  setNav("dash");
+  if (!BOOT) {
+    app.innerHTML = `<div class="view">
+      <div class="skel" style="height:34px;width:320px"></div>
+      <div class="skel" style="height:16px;width:440px;max-width:90%;margin-top:12px"></div>
+      <div class="skel" style="height:230px;margin-top:22px;border-radius:16px"></div>
+      <div class="skel" style="height:120px;margin-top:18px;border-radius:16px"></div>
+      <p class="coldstart">${esc(L("Waking the serverless instance — cold starts take ~5 s. It's doing its morning stretches.", "正在唤醒无服务器实例…冷启动约 5 秒，它正在做热身运动。"))}</p>
+    </div>`;
+    try { await fetchBootstrap(); }
+    catch (e) {
+      if (ep !== EPOCH) return;
+      app.innerHTML = errorCard(L("Could not reach the backend", "无法连接后端"), e, "#/");
+      return;
+    }
+    if (ep !== EPOCH) return;
+  } else {
+    fetchBootstrap().then(() => { if (ep === EPOCH) renderDashLists(); }).catch(() => {});
+  }
+  renderDash(ep);
+}
+
+function sampleChip(s) {
+  const name = typeof s === "string" ? s : (s.name || s.id || "");
+  const label = typeof s === "string" ? s : (s.title || s.label || s.name || name);
+  const isZh = /zh|cn|中/i.test(name + label) || /[\u4e00-\u9fff]/.test(label);
+  return `<button class="chip" data-sample="${esc(name)}"><span class="lang">${isZh ? "中" : "EN"}</span>${esc(label)}</button>`;
+}
+
+function runRow(r) {
+  const sid = r.sid || "";
+  return `<a class="row" href="#/s/${encodeURIComponent(sid)}">
+    <span class="row-main"><b>${esc(r.company || L("Parsing…", "解析中…"))}</b><span class="row-sub mono">${esc(r.quote_number || sid.slice(0, 10))}</span></span>
+    <span class="row-amt">${r.total_usd != null ? `<b>${fmtUSD(r.total_usd)}</b><span>${fmtCNY(r.total_cny)}</span>` : `<span class="faint">—</span>`}</span>
+    ${pill(r.status)}
+    <span class="row-time">${esc(fmtTime(r.created_at))}</span>
+  </a>`;
+}
+function archRow(r, i) {
+  const sid = r.sid || "";
+  return `<a class="row" href="#/s/${encodeURIComponent(sid)}">
+    <span class="row-main"><b>${esc(r.company || "—")}</b><span class="row-sub mono">${esc(r.quote_number || sid.slice(0, 10))}</span></span>
+    <span class="row-amt">${r.total_usd != null ? `<b>${fmtUSD(r.total_usd)}</b><span>${fmtCNY(r.total_cny)}</span>` : `<span class="faint">—</span>`}</span>
+    ${pill(r.status)}
+    <button class="btn btn-ghost btn-sm" data-arch="${i}">${esc(L("View quote", "查看报价单"))}</button>
+  </a>`;
+}
+
+function renderDash(ep) {
+  const samples = (BOOT && BOOT.samples) || [];
+  app.innerHTML = `<div class="view">
+    <h1>${esc(L("Autopilot for inbound inquiry emails", "全自动询价邮件"))}</h1>
+    <p class="sub" style="max-width:640px;margin-top:8px">${esc(L("A Qwen agent parses the inquiry, prices it against your catalog with live FX, screens business / legal / tax risk, and drafts a bilingual quote — with exactly one human approval.", "Qwen 智能体解析询价、按目录与实时汇率定价、扫描业务/法务/税务风险并起草中英双语报价——全程只需您批准一次。"))}</p>
+
+    <section class="card hero" style="margin-top:22px">
+      <div class="samples">
+        <span class="samples-label">${esc(L("Try a sample:", "试试样例："))}</span>
+        ${samples.map(sampleChip).join("") || `<span class="faint" style="font-size:12px">${esc(L("No samples", "暂无样例"))}</span>`}
+      </div>
+      <textarea id="emailText" class="email-box" placeholder="${esc(L("Paste the inbound inquiry email here (English or 中文)…", "在此粘贴客户的询价邮件（中文或英文均可）…"))}" spellcheck="false"></textarea>
+      <div class="hero-foot">
+        <span class="char-hint" id="charHint"></span>
+        <button class="btn btn-pri btn-big" id="runBtn">${esc(L("Run Autopilot", "启动自动报价"))}</button>
+      </div>
+    </section>
+
+    <div class="sec-h"><h2>${esc(L("Active runs", "进行中"))}</h2><span id="liveTag"></span></div>
+    <section class="card"><div class="rows" id="activeRows"></div></section>
+
+    <div class="sec-h"><h2>${esc(L("Archive", "归档"))}</h2></div>
+    <section class="card"><div class="rows" id="archRows"></div></section>
+  </div>`;
+
+  renderDashLists();
+
+  const ta = $("#emailText"), hint = $("#charHint");
+  const HINT_IDLE = L('Min 20 characters · English or 中文', '支持中英文询价 · 最少 20 字符');
+  hint.textContent = HINT_IDLE;
+
+  $(".samples").addEventListener("click", async e => {
+    const chip = e.target.closest("[data-sample]");
+    if (!chip) return;
+    chip.classList.add("loading");
+    try {
+      const r = await fetch(API + "/sample/" + encodeURIComponent(chip.dataset.sample));
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      let t = await r.text();
+      try { const j = JSON.parse(t); t = j.email_text || j.text || j.body || t; } catch (err) {}
+      if (ep !== EPOCH) return;
+      ta.value = t;
+      ta.dispatchEvent(new Event("input"));
+      ta.focus();
+    } catch (err) { toast(L("Sample failed: ", "样例加载失败：") + err.message, "bad"); }
+    finally { chip.classList.remove("loading"); }
+  });
+
+  ta.addEventListener("input", () => {
+    const n = ta.value.trim().length;
+    if (n === 0) { hint.className = "char-hint"; hint.textContent = HINT_IDLE; }
+    else if (n < 20) { hint.className = "char-hint bad"; hint.textContent = L(`${20 - n} more characters needed`, `还差 ${20 - n} 个字符`); }
+    else { hint.className = "char-hint"; hint.textContent = L(`${n} characters · ready`, `${n} 字符 · 就绪`); }
+  });
+
+  $("#runBtn").addEventListener("click", async () => {
+    const txt = ta.value.trim();
+    if (txt.length < 20) {
+      hint.className = "char-hint bad";
+      hint.textContent = L("Email too short (min 20 chars)", "邮件内容太短（至少 20 字符）");
+      ta.focus();
+      return;
+    }
+    const btn = $("#runBtn");
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spin"></span>' + esc(L("Handing off…", "正在移交智能体…"));
+    try {
+      const r = await jfetch("/api/submit", { method: "POST", body: JSON.stringify({ email_text: txt }) });
+      location.hash = "#/s/" + encodeURIComponent(r.sid);
+    } catch (e) {
+      btn.disabled = false;
+      btn.textContent = L("Run Autopilot", "启动自动报价");
+      if (e.status === 422) { hint.className = "char-hint bad"; hint.textContent = L("Rejected: too short (422)", "邮件内容太短，服务器已拒绝（422）"); }
+      else toast(L("Submit failed: ", "提交失败：") + e.message, "bad");
+    }
+  });
+
+  $("#archRows").addEventListener("click", e => {
+    const b = e.target.closest("[data-arch]");
+    if (!b) return;
+    e.preventDefault(); e.stopPropagation();
+    openArchivedQuote(((BOOT && BOOT.archived) || [])[+b.dataset.arch], b);
+  });
+
+  (function liveLoop() {
+    const act = (BOOT && BOOT.submissions) || [];
+    if (!act.some(r => r.status === "running")) return;
+    setTimeout(async () => {
+      if (ep !== EPOCH) return;
+      try { await fetchBootstrap(); } catch (e) { return; }
+      if (ep !== EPOCH) return;
+      renderDashLists();
+      liveLoop();
+    }, 6000);
+  })();
+}
+
+function renderDashLists() {
+  const act = (BOOT && BOOT.submissions) || [];
+  const arch = (BOOT && BOOT.archived) || [];
+  const a = $("#activeRows"), b = $("#archRows"), lt = $("#liveTag");
+  if (!a || !b) return;
+  a.innerHTML = act.length ? act.map(runRow).join("") : `<div class="empty-hint">${esc(L("No active runs — paste an email above to start one.", "暂无进行中的运行——在上方粘贴邮件即可开始。"))}</div>`;
+  b.innerHTML = arch.length ? arch.map(archRow).join("") : `<div class="empty-hint">${esc(L("Approved and closed runs will appear here.", "已批准并归档的运行会显示在这里。"))}</div>`;
+  if (lt) lt.innerHTML = act.some(r => r.status === "running") ? '<span class="live-tag"><i></i>Live</span>' : "";
+}
+
+async function openArchivedQuote(item, btn) {
+  if (!item) return;
+  if (btn) btn.classList.add("loading");
+  try {
+    let blob = null;
+    const art = (item.artifacts || []).find(x => /\.html?$/i.test(x.filename || "")) || (item.artifacts || []).find(x => /quote|html/i.test(x.kind || ""));
+    if (art) {
+      const r = await fetch(`${API}/artifacts/${encodeURIComponent(art.run_id)}/${encodeURIComponent(art.filename)}`);
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      blob = new Blob([await r.blob()], { type: "text/html" });
+    } else if (item.sid) {
+      const r = await fetch(`${API}/s/${encodeURIComponent(item.sid)}/preview`);
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      blob = new Blob([await r.text()], { type: "text/html" });
+    } else throw new Error("no artifact");
+    const u = URL.createObjectURL(blob);
+    window.open(u, "_blank");
+    setTimeout(() => URL.revokeObjectURL(u), 60000);
+  } catch (e) { toast(L("Quote failed: ", "报价单加载失败：") + e.message, "bad"); }
+  finally { if (btn) btn.classList.remove("loading"); }
+}
+
+/* ================= Run detail ================= */
+function runHeader(sid, s) {
+  return `<div class="back-line">
+    <a class="back-link" href="#/">← ${esc(L("Dashboard", "返回工作台"))}</a>
+    <span style="display:flex;align-items:center;gap:12px">${s ? pill(s.status) : ""}<span class="run-id">${esc(sid)}</span></span>
+  </div>`;
+}
+
+async function viewRun(sid, ep) {
+  setNav("");
+  app.innerHTML = `<div class="view">${runHeader(sid)}
+    <div class="skel" style="height:26px;width:280px"></div>
+    <div class="skel" style="height:340px;margin-top:18px;border-radius:16px"></div>
+  </div>`;
+  let d;
+  try { d = await jfetch("/api/s/" + encodeURIComponent(sid)); }
+  catch (e) {
+    if (ep !== EPOCH) return;
+    if (e.status === 404) {
+      app.innerHTML = `<div class="view">${runHeader(sid)}
+        <section class="card center-card">
+          <div class="glyph" style="background:var(--blue-tint);color:var(--blue)">↻</div>
+          <h2>${esc(L("Serverless instance recycled", "无服务器实例已回收"))}</h2>
+          <p>${esc(L("This run lived in a serverless instance that has since been recycled. Please resubmit the inquiry — it only takes a moment.", "这次运行的状态保存在无服务器实例的内存里，而那台实例已经回收了。请返回工作台重新提交询价邮件。"))}</p>
+          <a class="btn btn-pri" href="#/">${esc(L("Back to dashboard", "返回工作台重新提交"))}</a>
+        </section></div>`;
+    } else app.innerHTML = errorCard(L("Could not load this run", "无法加载运行详情"), e, "#/s/" + encodeURIComponent(sid));
+    return;
+  }
+  if (ep !== EPOCH) return;
+  renderRun(sid, (d && d.s) || {}, d && d.summary, ep);
+}
+
+function renderRun(sid, s, summary, ep) {
+  switch (s.status) {
+    case "running":            return renderRunning(sid, s, ep);
+    case "awaiting_approval":  return renderAwaiting(sid, s, summary, ep);
+    case "failed":             return renderFailed(sid, s);
+    default:                   return renderOutcome(sid, s, summary, ep);
+  }
+}
+
+/* ---- stage helpers ---- */
+function normStages(raw) {
+  const m = {};
+  (raw || []).forEach((st, i) => {
+    if (st == null) return;
+    if (typeof st === "string") { m[st] = { status: "done", detail: "" }; return; }
+    const key = st.key || st.stage || st.name || st.id || (STAGES[i] && STAGES[i].key);
+    if (!key) return;
+    m[key] = { status: String(st.status || st.state || "done"), detail: st.detail || st.message || st.note || st.summary || "" };
+  });
+  return m;
+}
+function stageClass(raw) {
+  if (/done|complete|success|ok|finish/i.test(raw)) return "is-done";
+  if (/run|active|progress|start|working/i.test(raw)) return "is-active";
+  if (/fail|error/i.test(raw)) return "is-failed";
+  return "is-pending";
+}
+function stageRow(stg, i) {
+  return `<div class="stg is-pending" id="stg-${stg.key}">
+    <div class="stg-rail"><span class="stg-dot"></span>${i < STAGES.length - 1 ? '<span class="stg-line"></span>' : ""}</div>
+    <div class="stg-body"><p class="stg-zh">${esc(L(stg.en, stg.zh))}</p><p class="stg-note"></p></div>
+    <span class="stg-state">${esc(L("waiting", "等待"))}</span>
+  </div>`;
+}
+const STG_LABEL = () => ({ "is-done": L("done", "完成"), "is-active": L("working", "进行中"), "is-failed": L("failed", "失败"), "is-pending": L("waiting", "等待") });
+function updateStages(raw, runStatus) {
+  const m = normStages(raw);
+  const lbl = STG_LABEL();
+  let doneCount = 0, sawActive = false;
+  STAGES.forEach(stg => {
+    const el = document.getElementById("stg-" + stg.key);
+    if (!el) return;
+    const info = m[stg.key];
+    let cls = info ? stageClass(info.status) : "is-pending";
+    if (cls === "is-done") doneCount++;
+    if (cls === "is-active") sawActive = true;
+    el.className = "stg " + cls;
+    el.querySelector(".stg-state").textContent = lbl[cls];
+    el.querySelector(".stg-note").textContent = info && info.detail ? info.detail : (cls === "is-active" ? L("working…", "处理中…") : "");
+  });
+  if (!sawActive && runStatus === "running") {
+    for (const stg of STAGES) {
+      const el = document.getElementById("stg-" + stg.key);
+      if (el && el.classList.contains("is-pending")) {
+        el.className = "stg is-active";
+        el.querySelector(".stg-state").textContent = lbl["is-active"];
+        el.querySelector(".stg-note").textContent = L("working…", "处理中…");
+        break;
+      }
+    }
+  }
+  const p = document.getElementById("pipeProgress");
+  if (p) p.innerHTML = `<b>${doneCount}</b>/${STAGES.length}`;
+}
+
+/* ---- running view ---- */
+function renderRunning(sid, s, ep) {
+  app.innerHTML = `<div class="view">${runHeader(sid, s)}
+    <h1 style="margin-bottom:4px">${esc(L("The agent is on it", "智能体正在处理"))}</h1>
+    <p class="sub">${esc(L("Parse → FX → pricing → risk → draft, about 15–25 s. It will pause for your approval when the draft is ready.", "解析 → 汇率 → 定价 → 风控 → 起草，全程约 15–25 秒。完成后将暂停，等待您审批。"))}</p>
+    <section class="card card-pad" style="margin-top:20px">
+      <div class="pipe-head">
+        <h2>${esc(L("Pipeline", "流水线"))}</h2>
+        <div class="pipe-meta"><span>${esc(L("Elapsed", "已用时"))} <b id="elapsed">0</b>s</span><span>${esc(L("Stage", "阶段"))} <span id="pipeProgress"><b>0</b>/6</span></span></div>
+      </div>
+      <div class="pipe">${STAGES.map(stageRow).join("")}</div>
+      <p class="reconnect" id="reconnect" hidden></p>
+    </section>
+  </div>`;
+
+  updateStages(s.stages, "running");
+
+  const t0 = (() => { const d = new Date(s.created_at); return isNaN(d) ? Date.now() : d.getTime(); })();
+  const tick = setInterval(() => {
+    if (ep !== EPOCH) { clearInterval(tick); return; }
+    const el = document.getElementById("elapsed");
+    if (el) el.textContent = Math.max(0, Math.round((Date.now() - t0) / 1000));
+  }, 1000);
+
+  let fails = 0;
+  (async function poll() {
+    await sleep(1500);
+    if (ep !== EPOCH) return;
+    try {
+      const st = await jfetch(`/s/${encodeURIComponent(sid)}/state`);
+      if (ep !== EPOCH) return;
+      fails = 0;
+      const rc = document.getElementById("reconnect");
+      if (rc) rc.hidden = true;
+      updateStages(st.stages, st.status);
+      if (st.status && st.status !== "running") { viewRun(sid, ep); return; }
+    } catch (e) {
+      if (ep !== EPOCH) return;
+      fails++;
+      const rc = document.getElementById("reconnect");
+      if (rc) { rc.hidden = false; rc.textContent = L(`Reconnecting (attempt ${fails})…`, `连接不稳定，正在重连（第 ${fails} 次）…`); }
+      if (fails > 20) {
+        app.innerHTML = errorCard(L("Lost contact with the backend after 20 attempts", "重连 20 次后仍与后端失去联系"), e, "#/s/" + encodeURIComponent(sid));
+        return;
+      }
+    }
+    poll();
+  })();
+}
+
+/* ---- risk flags ---- */
+function flagsHTML(flags) {
+  if (!flags || !flags.length) {
+    return `<div class="noflags">✓ ${esc(L("No risk flags found — clear to approve.", "未发现风险标记，可以放心批准。"))}</div>`;
+  }
+  const order = { block: 0, warn: 1, info: 2 };
+  return flags.slice().sort((a, b) => (order[a.severity] ?? 3) - (order[b.severity] ?? 3)).map(f => {
+    const sev = SEV[f.severity] || { en: f.severity || "?", zh: f.severity || "?" };
+    const primary = L(f.message_en, f.message_zh) || "";
+    const secondary = L(f.message_zh, f.message_en) || "";
+    return `<div class="flag f-${esc(f.severity || "info")}">
+      <span class="sev">${esc(L(sev.en, sev.zh))}</span>
+      <span><p class="zh">${esc(primary)}</p>${secondary && secondary !== primary ? `<p class="en">${esc(secondary)}</p>` : ""}${f.code ? `<code>${esc(f.code)}</code>` : ""}</span>
+    </div>`;
+  }).join("");
+}
+
+function statsHTML(s) {
+  return `<section class="card" style="margin-top:18px"><div class="stats">
+    <div class="stat"><div class="k">${esc(L("CUSTOMER", "客户"))}</div><div class="v" style="font-size:15px">${esc(s.company || "—")}</div></div>
+    <div class="stat"><div class="k">${esc(L("QUOTE №", "报价编号"))}</div><div class="v mono" style="font-size:15px">${esc(s.quote_number || "—")}</div></div>
+    <div class="stat"><div class="k">${esc(L("TOTAL (USD)", "合计 (USD)"))}</div><div class="v">${fmtUSD(s.total_usd)}</div></div>
+    <div class="stat"><div class="k">${esc(L("TOTAL (CNY)", "合计 (CNY)"))}</div><div class="v">${fmtCNY(s.total_cny)}<small>${esc(L("ref.", "参考"))}</small></div></div>
+  </div></section>`;
+}
+
+function loadPreview(sid, ep) {
+  const holder = document.getElementById("previewHolder");
+  if (!holder) return;
+  fetch(`${API}/s/${encodeURIComponent(sid)}/preview`)
+    .then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); })
+    .then(t => {
+      if (ep !== EPOCH) return;
+      const f = document.createElement("iframe");
+      f.setAttribute("sandbox", "allow-same-origin");
+      f.setAttribute("title", "Quote preview");
+      holder.innerHTML = "";
+      holder.appendChild(f);
+      f.srcdoc = t;
+    })
+    .catch(e => {
+      if (ep !== EPOCH) return;
+      holder.innerHTML = `<div class="preview-load" style="position:static;padding:60px 20px">${esc(L("Preview failed: ", "预览加载失败："))}${esc(e.message)}&nbsp;<button class="btn btn-ghost btn-sm" id="pvRetry">${esc(L("Retry", "重试"))}</button></div>`;
+      const b = document.getElementById("pvRetry");
+      if (b) b.addEventListener("click", () => { holder.innerHTML = `<div class="preview-load" style="position:static;padding:60px 20px">${esc(L("Loading…", "加载中…"))}</div>`; loadPreview(sid, ep); });
+    });
+}
+
+/* ---- awaiting approval (the gate) ---- */
+function renderAwaiting(sid, s, summary, ep) {
+  const flags = s.risk_flags || [];
+  const blocked = flags.some(f => f.severity === "block");
+  app.innerHTML = `<div class="view">${runHeader(sid, s)}
+    <section class="gate">
+      <div class="gate-band">
+        <span class="gate-badge"><i></i>${esc(L("Human approval gate", "人工审批闸口"))}</span>
+        <h2>${esc(L("Pipeline complete — the autopilot has paused for you", "流水线已完成，自动驾驶在此暂停"))}</h2>
+        <div class="ministages">
+          ${STAGES.map((x, i) => `<span class="md" title="${esc(L(x.en, x.zh))}"></span>${i < STAGES.length - 1 ? '<span class="ml"></span>' : ""}`).join("")}
+          <span class="ml"></span><span class="mg"><i></i></span>
+          <span class="mtxt">${esc(L("6 / 6 stages complete · awaiting your decision", "6/6 阶段完成 · 等待您的决定"))}</span>
+        </div>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="k">${esc(L("CUSTOMER", "客户"))}</div><div class="v" style="font-size:15px">${esc(s.company || "—")}</div></div>
+        <div class="stat"><div class="k">${esc(L("QUOTE №", "报价编号"))}</div><div class="v mono" style="font-size:15px">${esc(s.quote_number || "—")}</div></div>
+        <div class="stat"><div class="k">${esc(L("TOTAL (USD)", "合计 (USD)"))}</div><div class="v">${fmtUSD(s.total_usd)}</div></div>
+        <div class="stat"><div class="k">${esc(L("TOTAL (CNY)", "合计 (CNY)"))}</div><div class="v">${fmtCNY(s.total_cny)}<small>${esc(L("ref.", "参考"))}</small></div></div>
+      </div>
+    </section>
+
+    <div class="approve-grid">
+      <div>
+        <section class="card card-pad">
+          <h2>${esc(L("Risk flags", "风险标记"))}</h2>
+          <div style="margin-top:14px">${flagsHTML(flags)}</div>
+        </section>
+        <section class="card card-pad" style="margin-top:18px">
+          <h2>${esc(L("Deal summary", "交易摘要"))}</h2>
+          <pre class="summary-pre" style="margin-top:12px">${esc(summary || L("(No summary provided)", "（暂无摘要）"))}</pre>
+        </section>
+        <section class="card card-pad" style="margin-top:18px">
+          <h2>${esc(L("Your decision", "您的决定"))}</h2>
+          <textarea class="notes-box" id="notes" style="margin-top:12px" placeholder="${esc(L("Approval notes (optional, recorded on file)…", "审批备注（可选，会记录在案）…"))}"></textarea>
+          <div class="decide">
+            <button class="btn btn-ok" id="approveBtn" ${blocked ? "disabled" : ""}>${esc(L("Approve & issue", "批准并出具报价"))}</button>
+            <button class="btn btn-danger" id="rejectBtn">${esc(L("Reject", "驳回"))}</button>
+          </div>
+          ${blocked ? `<p class="block-note">${esc(L("Approval is locked by a block-severity flag. Resolve it, or reject and handle offline.", "存在「阻断」级风险标记，批准已锁定。请先解决相关问题，或驳回后线下处理。"))}</p>` : ""}
+        </section>
+      </div>
+      <section class="card card-pad">
+        <h2>${esc(L("Quote preview", "报价单预览"))}</h2>
+        <div class="preview-frame" id="previewHolder" style="margin-top:12px"><div class="preview-load">${esc(L("Rendering preview…", "正在生成预览…"))}</div></div>
+      </section>
+    </div>
+  </div>`;
+
+  loadPreview(sid, ep);
+
+  async function decide(action) {
+    const ab = document.getElementById("approveBtn"), rb = document.getElementById("rejectBtn");
+    const btn = action === "approve" ? ab : rb;
+    ab.disabled = true; rb.disabled = true;
+    const orig = btn.textContent;
+    btn.innerHTML = '<span class="spin"></span>' + esc(action === "approve" ? L("Issuing…", "出具中…") : L("Rejecting…", "驳回中…"));
+    try {
+      await jfetch(`/api/s/${encodeURIComponent(sid)}/decision`, { method: "POST", body: JSON.stringify({ action, notes: (document.getElementById("notes") || {}).value || "" }) });
+      toast(action === "approve" ? L("Approved — issuing the quote", "已批准，正在出具报价单") : L("Rejected", "已驳回"), action === "approve" ? "ok" : undefined);
+      viewRun(sid, ep);
+    } catch (e) {
+      if (ep !== EPOCH) return;
+      if (e.status === 409) { toast(L("Conflict (409): already handled or wrong state. ", "操作被拒绝（409）：该运行已被处理或状态不符。") + e.message, "warn"); viewRun(sid, ep); return; }
+      toast(L("Decision failed: ", "提交决定失败：") + e.message, "bad");
+      ab.disabled = blocked; rb.disabled = false;
+      btn.textContent = orig;
+    }
+  }
+  const ab = document.getElementById("approveBtn");
+  if (ab) ab.addEventListener("click", () => decide("approve"));
+  document.getElementById("rejectBtn").addEventListener("click", () => decide("reject"));
+}
+
+/* ---- outcome (approved / rejected / unknown) ---- */
+function artifactsHTML(s) {
+  const arts = s.artifacts || [];
+  if (!arts.length) return `<span class="faint" style="font-size:12.5px">${esc(L("No artifacts", "暂无产物"))}</span>`;
+  return arts.map((a, i) => `<button class="art-chip" data-art="${i}"><span class="kind">${esc(a.kind || "file")}</span>${esc(a.filename || "artifact")}</button>`).join("");
+}
+async function openArtifact(a, btn) {
+  if (!a) return;
+  if (btn) btn.classList.add("loading");
+  try {
+    const r = await fetch(`${API}/artifacts/${encodeURIComponent(a.run_id)}/${encodeURIComponent(a.filename)}`);
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    let blob = await r.blob();
+    const fn = a.filename || "artifact";
+    if (/\.html?$/i.test(fn)) blob = new Blob([blob], { type: "text/html" });
+    else if (/\.(txt|md|eml)$/i.test(fn)) blob = new Blob([blob], { type: "text/plain;charset=utf-8" });
+    const u = URL.createObjectURL(blob);
+    if (/\.(html?|pdf|txt|md|eml|png|jpe?g)$/i.test(fn)) window.open(u, "_blank");
+    else { const l = document.createElement("a"); l.href = u; l.download = fn; document.body.appendChild(l); l.click(); l.remove(); }
+    setTimeout(() => URL.revokeObjectURL(u), 60000);
+  } catch (e) { toast(L("Artifact failed: ", "产物加载失败：") + e.message, "bad"); }
+  finally { if (btn) btn.classList.remove("loading"); }
+}
+
+function renderOutcome(sid, s, summary, ep) {
+  const ok = s.status === "approved";
+  const rej = s.status === "rejected";
+  const banner = ok
+    ? `<div class="banner b-ok"><span class="bi">✓</span><span><h2>${esc(L("Approved & issued", "已批准并出具"))}</h2><p class="sub" style="margin-top:2px">${esc(L("The bilingual quotation and reply-email draft are ready below.", "双语报价单与回复邮件草稿已生成，可在下方产物中查看。"))}</p></span></div>`
+    : rej
+    ? `<div class="banner b-rej"><span class="bi">—</span><span><h2>${esc(L("Rejected", "已驳回"))}</h2><p class="sub" style="margin-top:2px">${esc(L("No quote was issued; the run is archived.", "本次报价未出具，运行已归档。"))}</p></span></div>`
+    : `<div class="banner b-rej"><span class="bi">?</span><span><h2>${esc(L("Status: ", "状态：") + (s.status || L("unknown", "未知")))}</h2></span></div>`;
+
+  app.innerHTML = `<div class="view">${runHeader(sid, s)}
+    ${banner}
+    ${statsHTML(s)}
+    <section class="card card-pad" style="margin-top:18px">
+      <h2>${esc(L("Artifacts", "产物"))}</h2>
+      <div class="artifacts" style="margin-top:13px" id="artBox">${artifactsHTML(s)}</div>
+      ${s.tokens != null ? `<p class="tokens-line">${esc(L("Qwen tokens used this run: ", "本次运行消耗 Qwen tokens："))}<b>${Number(s.tokens).toLocaleString("en-US")}</b></p>` : ""}
+    </section>
+    ${(s.risk_flags && s.risk_flags.length) ? `<section class="card card-pad" style="margin-top:18px"><h2>${esc(L("Risk flags", "风险标记"))}</h2><div style="margin-top:14px">${flagsHTML(s.risk_flags)}</div></section>` : ""}
+    ${ok ? `<section class="card card-pad" style="margin-top:18px">
+      <h2>${esc(L("Quote preview", "报价单预览"))}</h2>
+      <div class="preview-frame" id="previewHolder" style="margin-top:12px"><div class="preview-load">${esc(L("Loading preview…", "加载预览…"))}</div></div>
+    </section>` : ""}
+  </div>`;
+
+  const box = document.getElementById("artBox");
+  if (box) box.addEventListener("click", e => {
+    const b = e.target.closest("[data-art]");
+    if (b) openArtifact((s.artifacts || [])[+b.dataset.art], b);
+  });
+  if (ok) loadPreview(sid, ep);
+}
+
+function renderFailed(sid, s) {
+  app.innerHTML = `<div class="view">${runHeader(sid, s)}
+    <div class="banner b-bad"><span class="bi">✕</span><span><h2>${esc(L("Run failed", "运行失败"))}</h2><p class="sub" style="margin-top:2px">${esc(L("The agent hit an error; no quote was produced.", "智能体在处理过程中遇到问题，未产生报价。"))}</p></span></div>
+    ${s.error ? `<pre class="err-pre">${esc(s.error)}</pre>` : ""}
+    ${s.tokens != null ? `<p class="tokens-line">${esc(L("Qwen tokens used: ", "消耗 Qwen tokens："))}<b>${Number(s.tokens).toLocaleString("en-US")}</b></p>` : ""}
+    <div style="margin-top:20px"><a class="btn btn-pri" href="#/">${esc(L("Back to dashboard", "返回工作台重新提交"))}</a></div>
+  </div>`;
+}
+
+/* ================= Settings ================= */
+let PROFILE = null, DIRTY = false;
+
+function normProfile(p) {
+  p = (p && typeof p === "object") ? p : {};
+  p.seller = p.seller || {}; p.terms = p.terms || {}; p.rules = p.rules || {};
+  p.catalog = Array.isArray(p.catalog) ? p.catalog : [];
+  p.catalog.forEach(it => { if (it._disc == null) it._disc = discToStr(it.volume_discounts); });
+  return p;
+}
+function discToStr(vd) { return (vd || []).map(d => `${d.min_qty}:${d.pct}`).join(", "); }
+function parseDisc(s) {
+  return String(s || "").split(/[,，;；]/).map(t => t.trim()).filter(Boolean).map(t => {
+    const parts = t.split(/[:：]/);
+    return { min_qty: Number(parts[0]), pct: Number(parts[1]) };
+  }).filter(d => isFinite(d.min_qty) && isFinite(d.pct));
+}
+function setPath(o, p, v) {
+  const ks = p.split(".");
+  let t = o;
+  for (let i = 0; i < ks.length - 1; i++) { t[ks[i]] = t[ks[i]] || {}; t = t[ks[i]]; }
+  t[ks[ks.length - 1]] = v;
+}
+function markDirty() { DIRTY = true; const b = document.getElementById("savebar"); if (b) b.classList.add("show"); }
+function clearDirty() { DIRTY = false; const b = document.getElementById("savebar"); if (b) b.classList.remove("show"); }
+
+async function viewSettings(ep) {
+  setNav("settings");
+  app.innerHTML = `<div class="view">
+    <div class="skel" style="height:30px;width:220px"></div>
+    <div class="skel" style="height:96px;margin-top:20px;border-radius:16px"></div>
+    <div class="skel" style="height:150px;margin-top:18px;border-radius:16px"></div>
+    <p class="coldstart">${esc(L("Loading company profile…", "读取公司档案…"))}</p>
+  </div>`;
+  try { PROFILE = normProfile(await jfetch("/api/profile")); }
+  catch (e) {
+    if (ep !== EPOCH) return;
+    app.innerHTML = errorCard(L("Could not load the company profile", "无法读取公司档案"), e, "#/settings");
+    return;
+  }
+  if (ep !== EPOCH) return;
+  clearDirty();
+  renderSettings(ep);
+}
+
+function fld(label, path, val, opts) {
+  opts = opts || {};
+  return `<label class="fld ${opts.full ? "full" : ""}"><span>${esc(label)}</span>
+    <input data-path="${path}" type="${opts.type || "text"}" ${opts.step ? `step="${opts.step}"` : ""} value="${esc(val ?? "")}" ${opts.ph ? `placeholder="${esc(opts.ph)}"` : ""}></label>`;
+}
+function fldArea(label, path, val) {
+  return `<label class="fld"><span>${esc(label)}</span><textarea data-path="${path}">${esc(val ?? "")}</textarea></label>`;
+}
+
+function catalogRows() {
+  const cat = PROFILE.catalog;
+  if (!cat.length) return `<tr><td colspan="8" style="text-align:center;color:var(--faint);padding:22px;font-size:13px">${esc(L("Catalog is empty — add an item or import from your website.", "目录为空——添加产品或从官网导入。"))}</td></tr>`;
+  return cat.map((it, i) => `
+    <tr>
+      <td style="width:110px"><input data-ci="${i}" data-cf="sku" value="${esc(it.sku)}" placeholder="SKU"></td>
+      <td><input data-ci="${i}" data-cf="name_zh" value="${esc(it.name_zh)}" placeholder="${esc(L("Name (ZH)", "名称（中）"))}"></td>
+      <td><input data-ci="${i}" data-cf="name_en" value="${esc(it.name_en)}" placeholder="${esc(L("Name (EN)", "名称（英）"))}"></td>
+      <td style="width:76px"><input data-ci="${i}" data-cf="unit_zh" value="${esc(it.unit_zh)}" placeholder="件"></td>
+      <td style="width:76px"><input data-ci="${i}" data-cf="unit" value="${esc(it.unit)}" placeholder="pc"></td>
+      <td class="num" style="width:110px"><input data-ci="${i}" data-cf="unit_price_usd" type="number" step="0.01" value="${esc(it.unit_price_usd ?? "")}" placeholder="0.00"></td>
+      <td class="disc" style="width:130px"><input data-ci="${i}" data-cf="_disc" value="${esc(it._disc)}" placeholder="50:8, 100:12"></td>
+      <td style="width:36px"><button class="del-btn" data-del="${i}" title="${esc(L("Delete", "删除"))}">✕</button></td>
+    </tr>
+    <tr class="desc-row">
+      <td></td>
+      <td colspan="3"><input data-ci="${i}" data-cf="description_zh" value="${esc(it.description_zh)}" placeholder="${esc(L("Description (ZH)", "描述（中文）"))}"></td>
+      <td colspan="3"><input data-ci="${i}" data-cf="description_en" value="${esc(it.description_en)}" placeholder="${esc(L("Description (EN)", "描述（英文）"))}"></td>
+      <td></td>
+    </tr>`).join("");
+}
+
+function renderSettings(ep, importNote) {
+  const p = PROFILE, s = p.seller, t = p.terms, r = p.rules;
+  app.innerHTML = `<div class="view">
+    <h1>${esc(L("Settings", "设置"))}</h1>
+    <p class="sub">${esc(L("The company profile the agent prices and drafts against.", "公司档案、条款与产品目录——智能体定价与起草的依据。"))}</p>
+
+    <section class="card card-pad lang-card" style="margin-top:20px">
+      <div class="lc-txt">
+        <h2>${esc(L("Interface language", "界面语言"))}</h2>
+        <p class="sub" style="margin-top:2px">${esc(L("The console shows one language at a time. Quote documents stay bilingual.", "控制台一次只显示一种语言；报价单文档始终保持中英双语。"))}</p>
+      </div>
+      <div class="seg" id="langSeg">
+        <button data-lang="en" class="${LANG === "en" ? "on" : ""}">English</button>
+        <button data-lang="zh" class="${LANG === "zh" ? "on" : ""}">中文</button>
+      </div>
+    </section>
+
+    <section class="card card-pad import-card" style="margin-top:18px">
+      <h2>✨ ${esc(L("Import from website", "从网站导入"))}</h2>
+      <p class="sub">${esc(L("Qwen reads your site and prefills company info + catalog. Legal & tax terms are never overwritten.", "粘贴公司官网，AI 阅读网站并预填公司信息与产品目录。法务与税务条款不会被覆盖。"))}</p>
+      <div class="import-row">
+        <input id="importUrl" type="url" placeholder="https://www.your-company.com">
+        <button class="btn btn-pri" id="importBtn">${esc(L("Import", "AI 读取网站"))}</button>
+      </div>
+      <div id="importStatus">${importNote || ""}</div>
+    </section>
+
+    <section class="card card-pad" style="margin-top:18px">
+      <h2>${esc(L("Company", "公司信息"))}</h2>
+      <div class="grid2" id="companyGrid">
+        ${fld(L("Name (EN)", "公司名称（英）"), "seller.name_en", s.name_en)}
+        ${fld(L("Name (ZH)", "公司名称（中）"), "seller.name_zh", s.name_zh)}
+        ${fld(L("Jurisdiction (EN)", "注册地（英）"), "seller.jurisdiction_en", s.jurisdiction_en)}
+        ${fld(L("Jurisdiction (ZH)", "注册地（中）"), "seller.jurisdiction_zh", s.jurisdiction_zh)}
+        ${fld(L("Website", "网站"), "seller.website", s.website, { ph: "https://…" })}
+        ${fld(L("Email", "邮箱"), "seller.email", s.email, { ph: "sales@…" })}
+        <label class="fld full"><span>${esc(L("Description", "公司简介"))}</span><textarea data-path="seller.description">${esc(s.description ?? "")}</textarea></label>
+      </div>
+    </section>
+
+    <section class="card card-pad" style="margin-top:18px">
+      <h2>${esc(L("Terms", "条款"))}</h2>
+      <div class="grid2" style="margin-top:16px">
+        ${fldArea(L("Payment (EN)", "付款条款（英）"), "terms.payment_en", t.payment_en)}
+        ${fldArea(L("Payment (ZH)", "付款条款（中）"), "terms.payment_zh", t.payment_zh)}
+        ${fldArea(L("Legal (EN)", "法律条款（英）"), "terms.legal_en", t.legal_en)}
+        ${fldArea(L("Legal (ZH)", "法律条款（中）"), "terms.legal_zh", t.legal_zh)}
+        ${fldArea(L("Tax note (EN)", "税务说明（英）"), "terms.tax_note_en", t.tax_note_en)}
+        ${fldArea(L("Tax note (ZH)", "税务说明（中）"), "terms.tax_note_zh", t.tax_note_zh)}
+      </div>
+    </section>
+
+    <section class="card card-pad" style="margin-top:18px">
+      <h2>${esc(L("Rules", "业务规则"))}</h2>
+      <div class="grid2" style="margin-top:16px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr))">
+        ${fld(L("Validity (days)", "报价有效期（天）"), "rules.quote_validity_days", r.quote_validity_days, { type: "number" })}
+        ${fld(L("Wire threshold (USD)", "电汇阈值（USD）"), "rules.wire_threshold_usd", r.wire_threshold_usd, { type: "number" })}
+        ${fld(L("Max extra discount %", "最大额外折扣 %"), "rules.max_extra_discount_pct", r.max_extra_discount_pct, { type: "number", step: "0.1" })}
+        ${fld(L("Urgent deadline (days)", "紧急交期（天）"), "rules.urgent_deadline_days", r.urgent_deadline_days, { type: "number" })}
+        ${fld(L("Quote prefix", "报价编号前缀"), "rules.quote_prefix", r.quote_prefix, { ph: "QP" })}
+      </div>
+    </section>
+
+    <section class="card card-pad" style="margin-top:18px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap">
+        <h2>${esc(L("Catalog", "产品目录"))}</h2>
+        <button class="btn btn-ghost btn-sm" id="addItem">＋ ${esc(L("Add item", "添加产品"))}</button>
+      </div>
+      <p class="sub">${L('Volume discounts use compact syntax: <code class="mono" style="font-size:11.5px;background:var(--blue-ghost);padding:2px 6px;border-radius:5px">50:8, 100:12</code> = 8% off from 50 units, 12% off from 100.', '阶梯折扣使用紧凑语法：<code class="mono" style="font-size:11.5px;background:var(--blue-ghost);padding:2px 6px;border-radius:5px">50:8, 100:12</code> 表示满 50 件减 8%、满 100 件减 12%。')}</p>
+      <div class="scroll-x">
+        <table class="cat-table">
+          <thead><tr>
+            <th>SKU</th><th>${esc(L("Name (ZH)", "名称（中）"))}</th><th>${esc(L("Name (EN)", "名称（英）"))}</th>
+            <th>${esc(L("Unit (ZH)", "单位（中）"))}</th><th>${esc(L("Unit (EN)", "单位（英）"))}</th>
+            <th style="text-align:right">${esc(L("Unit price (USD)", "单价（USD）"))}</th><th>${esc(L("Volume discounts", "阶梯折扣"))}</th><th></th>
+          </tr></thead>
+          <tbody id="catBody">${catalogRows()}</tbody>
+        </table>
+      </div>
+    </section>
+
+    <div class="demo-note" style="margin-top:18px">
+      <span style="font-size:15px">ⓘ</span>
+      <span><b>${esc(L("Demo persistence", "演示环境提示"))}</b>${esc(L(": settings live in the serverless instance's memory and reset to defaults when it is recycled.", "：设置保存在无服务器实例的内存中，实例被回收后将恢复默认值。"))}</span>
+    </div>
+    <p class="api-line">API: ${esc(API)} — override via localStorage "QP_API"</p>
+
+    <div class="savebar${DIRTY ? " show" : ""}" id="savebar">
+      <div class="savebar-in">
+        <span>${esc(L("Unsaved changes", "有未保存的更改"))}</span>
+        <div class="btns">
+          <button class="btn btn-ghost" id="discardBtn">${esc(L("Discard", "放弃"))}</button>
+          <button class="btn btn-pri" id="saveBtn">${esc(L("Save settings", "保存设置"))}</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+
+  const root = app.firstElementChild;
+
+  /* language toggle — applies immediately, no save needed */
+  document.getElementById("langSeg").addEventListener("click", e => {
+    const b = e.target.closest("[data-lang]");
+    if (!b || b.dataset.lang === LANG) return;
+    setLang(b.dataset.lang);
+  });
+
+  root.addEventListener("input", e => {
+    const el = e.target;
+    if (el.dataset.path) {
+      const v = el.type === "number" ? (el.value === "" ? null : Number(el.value)) : el.value;
+      setPath(PROFILE, el.dataset.path, v);
+      markDirty();
+      return;
+    }
+    if (el.dataset.ci != null && el.dataset.cf) {
+      const it = PROFILE.catalog[+el.dataset.ci];
+      if (!it) return;
+      if (el.dataset.cf === "unit_price_usd") it.unit_price_usd = el.value === "" ? null : Number(el.value);
+      else it[el.dataset.cf] = el.value;
+      markDirty();
+    }
+  });
+
+  document.getElementById("addItem").addEventListener("click", () => {
+    PROFILE.catalog.push({ sku: "", name_en: "", name_zh: "", description_en: "", description_zh: "", unit: "pc", unit_zh: "件", unit_price_usd: null, volume_discounts: [], _disc: "" });
+    document.getElementById("catBody").innerHTML = catalogRows();
+    markDirty();
+  });
+  document.getElementById("catBody").addEventListener("click", e => {
+    const b = e.target.closest("[data-del]");
+    if (!b) return;
+    PROFILE.catalog.splice(+b.dataset.del, 1);
+    document.getElementById("catBody").innerHTML = catalogRows();
+    markDirty();
+  });
+
+  document.getElementById("saveBtn").addEventListener("click", async () => {
+    const btn = document.getElementById("saveBtn");
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spin"></span>' + esc(L("Saving…", "保存中…"));
+    try {
+      const body = JSON.parse(JSON.stringify(PROFILE));
+      (body.catalog || []).forEach(it => { it.volume_discounts = parseDisc(it._disc); delete it._disc; });
+      await jfetch("/api/profile", { method: "PUT", body: JSON.stringify(body) });
+      clearDirty();
+      toast(L("Settings saved", "设置已保存"), "ok");
+    } catch (e) {
+      toast(L("Save failed: ", "保存失败：") + e.message, "bad");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = L("Save settings", "保存设置");
+    }
+  });
+  document.getElementById("discardBtn").addEventListener("click", () => { clearDirty(); viewSettings(ep); });
+
+  const IMPORT_PHASES = [
+    L("Fetching the website…", "正在访问网站…"),
+    L("Qwen is reading the pages…", "Qwen 正在阅读页面…"),
+    L("Extracting company info & catalog…", "提取公司信息与产品目录…"),
+    L("Polishing the draft — 15–30 s in total…", "整理草稿——全程约 15–30 秒…")
+  ];
+  document.getElementById("importBtn").addEventListener("click", async () => {
+    const inp = document.getElementById("importUrl");
+    let url = inp.value.trim();
+    if (!url) { inp.focus(); return; }
+    if (!/^https?:\/\//i.test(url)) url = "https://" + url;
+    const btn = document.getElementById("importBtn"), status = document.getElementById("importStatus");
+    btn.disabled = true; inp.disabled = true;
+    let phase = 0;
+    status.innerHTML = `<p class="import-phase">${esc(IMPORT_PHASES[0])}</p>`;
+    const cyc = setInterval(() => {
+      phase = Math.min(phase + 1, IMPORT_PHASES.length - 1);
+      const el = status.querySelector(".import-phase");
+      if (el) el.textContent = IMPORT_PHASES[phase];
+    }, 5000);
+    try {
+      const res = await jfetch("/api/profile/import", { method: "POST", body: JSON.stringify({ url }) });
+      clearInterval(cyc);
+      if (ep !== EPOCH) return;
+      const d = res && res.draft;
+      if (d) {
+        if (d.seller) for (const k in d.seller) { if (d.seller[k] != null && d.seller[k] !== "") PROFILE.seller[k] = d.seller[k]; }
+        if (Array.isArray(d.catalog) && d.catalog.length) { PROFILE.catalog = d.catalog; PROFILE.catalog.forEach(it => { it._disc = discToStr(it.volume_discounts); }); }
+        if (d.rules) for (const k in d.rules) { if (d.rules[k] != null && d.rules[k] !== "") PROFILE.rules[k] = d.rules[k]; }
+        /* terms are intentionally never overwritten */
+      }
+      DIRTY = true;
+      let note = `<p class="import-note in-ok">${esc(L("Draft applied from the website — review and save. Legal & tax terms were left untouched.", "已根据网站预填公司信息与目录草稿，请核对后保存。法务/税务条款保持不变。"))}${res && res.note ? "<br>" + esc(res.note) : ""}</p>`;
+      if (res && res.needs_price) note += `<p class="import-note in-warn" style="margin-top:8px">${esc(L("Some items came without prices — fill them in before saving.", "部分产品缺少价格，请在目录中手动补充后再保存。"))}</p>`;
+      renderSettings(ep, note);
+      toast(L("Import complete", "网站导入完成"), "ok");
+    } catch (e) {
+      clearInterval(cyc);
+      if (ep !== EPOCH) return;
+      status.innerHTML = `<p class="import-note in-warn">${esc(L("Import failed: ", "导入失败："))}${esc(e.message)}${esc(L(" — check the URL and try again.", " — 请检查网址后重试。"))}</p>`;
+      btn.disabled = false; inp.disabled = false;
+    }
+  });
+}
+
+/* ================= boot ================= */
+applyChrome();
+route();
+</script>
 </body>
 </html>
