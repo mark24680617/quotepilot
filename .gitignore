@@ -28,3 +28,6 @@ runs/
 # Local writable profile store (bundled default stays pristine)
 data/company_profile.local.json
 scratch_video/
+
+# Claude Code internal artifacts
+.claude/
