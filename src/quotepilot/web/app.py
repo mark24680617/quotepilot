@@ -107,6 +107,18 @@ def _require_owner(request: Request, sub: Submission) -> None:
         raise HTTPException(status_code=403, detail="You can only edit or decide your own runs.")
 
 
+def _owner_of_run(run_id: str) -> str | None:
+    """owner_user of the live submission that produced this run_id, else None
+    (e.g. a run evicted from memory or an archived run on disk)."""
+    with SUBMISSIONS_LOCK:
+        for s in SUBMISSIONS.values():
+            if s.result and s.result.artifacts and any(
+                Path(p).parent.name == run_id for p in s.result.artifacts.values()
+            ):
+                return s.owner_user
+    return None
+
+
 def _evict_old_submissions() -> None:
     """Keep the in-memory map bounded (called under SUBMISSIONS_LOCK)."""
     if len(SUBMISSIONS) <= guard.MAX_SUBMISSIONS:
@@ -579,7 +591,16 @@ async def make_decision(request: Request, sid: str, action: str = Form(...), not
 
 @app.get("/artifacts/{run_id}/{filename}")
 async def get_artifact(run_id: str, filename: str, request: Request):
-    auth.current_user(request)  # any signed-in user
+    user = auth.current_user(request)
+    # Ownership gate: only the run's owner (or admin) may read its artifacts.
+    # A run not tied to a live submission (evicted / archived on disk) is
+    # admin-only. 404 (not 403) so it never confirms a stranger's run exists.
+    owner = _owner_of_run(run_id)
+    if owner is None:
+        if user != auth.ADMIN_USER:
+            raise HTTPException(status_code=404, detail="Artifact not found")
+    elif user != owner and user != auth.ADMIN_USER:
+        raise HTTPException(status_code=404, detail="Artifact not found")
     # Validate run_id and filename formats
     if not re.match(r'^[0-9\-a-f]+$', run_id):
         raise HTTPException(status_code=404, detail="Invalid run ID")

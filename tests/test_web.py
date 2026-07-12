@@ -167,6 +167,43 @@ def test_run_ownership_isolation():
             appmod.SUBMISSIONS.pop("own-sid", None)
 
 
+def test_artifact_ownership_gate(tmp_path, monkeypatch):
+    from datetime import datetime, timezone
+    from quotepilot.models import Decision, RunResult
+    from quotepilot.web import app as appmod
+
+    runs = tmp_path / "runs"
+    run_dir = runs / "20260101-000000-ab"
+    run_dir.mkdir(parents=True)
+    (run_dir / "quote.html").write_text("<h1>secret quote</h1>")
+    monkeypatch.setattr(appmod, "RUNS_DIR", runs)
+
+    result = RunResult(
+        run_id="20260101-000000-ab",
+        decision=Decision(action="approve", notes=None, decided_at=datetime.now(timezone.utc)),
+        quote=make_quote(),
+        artifacts={"quote_html": str(run_dir / "quote.html")},
+    )
+    sub = appmod.Submission(
+        sid="art-sid", source="test", created_at=datetime.now(timezone.utc),
+        status="approved", stages=[], gate=WebGate(on_review=lambda: None),
+        owner_user="alice", result=result,
+    )
+    with appmod.SUBMISSIONS_LOCK:
+        appmod.SUBMISSIONS["art-sid"] = sub
+    try:
+        url = "/artifacts/20260101-000000-ab/quote.html"
+        assert client.get(url).status_code == 401                               # unauth
+        assert client.get(url, headers=auth_headers("mallory", "mallory1")).status_code == 404  # not owner
+        assert client.get(url, headers=auth_headers("alice", "alicepass1")).status_code == 200   # owner
+        admin_h = {"Authorization": "Bearer " + client.post(
+            "/api/auth", json={"username": "admin", "password": "88888888"}).json()["token"]}
+        assert client.get(url, headers=admin_h).status_code == 200               # admin
+    finally:
+        with appmod.SUBMISSIONS_LOCK:
+            appmod.SUBMISSIONS.pop("art-sid", None)
+
+
 def test_cors_allows_pages_origin_only():
     ok = client.get("/", headers={"Origin": "https://mark24680617.github.io"})
     assert ok.headers.get("access-control-allow-origin") == "https://mark24680617.github.io"
