@@ -8,6 +8,8 @@ from quotepilot.models import CoverLetters, Customer, FxRate, QuoteDraft, RiskFl
 from quotepilot.profile import load_profile
 from quotepilot.web.app import WebGate, app
 
+from conftest import ADMIN_TEST_PASSWORD
+
 client = TestClient(app)
 
 
@@ -124,12 +126,12 @@ def test_auth_login_and_signup():
     # short password -> 422
     assert client.post("/api/auth", json={"username": "u2", "password": "x"}).status_code == 422
     # admin default password works
-    assert client.post("/api/auth", json={"username": "admin", "password": "88888888"}).status_code == 200
+    assert client.post("/api/auth", json={"username": "admin", "password": ADMIN_TEST_PASSWORD}).status_code == 200
 
 
 def test_new_user_gets_blank_profile_admin_gets_luqlabs():
     admin_h = {"Authorization": "Bearer " + client.post(
-        "/api/auth", json={"username": "admin", "password": "88888888"}).json()["token"]}
+        "/api/auth", json={"username": "admin", "password": ADMIN_TEST_PASSWORD}).json()["token"]}
     admin_prof = client.get("/api/profile", headers=admin_h).json()
     assert admin_prof["seller"]["name_en"]  # LUQ LABS, non-empty
     assert admin_prof["catalog"]
@@ -197,7 +199,7 @@ def test_artifact_ownership_gate(tmp_path, monkeypatch):
         assert client.get(url, headers=auth_headers("mallory", "mallory1")).status_code == 404  # not owner
         assert client.get(url, headers=auth_headers("alice", "alicepass1")).status_code == 200   # owner
         admin_h = {"Authorization": "Bearer " + client.post(
-            "/api/auth", json={"username": "admin", "password": "88888888"}).json()["token"]}
+            "/api/auth", json={"username": "admin", "password": ADMIN_TEST_PASSWORD}).json()["token"]}
         assert client.get(url, headers=admin_h).status_code == 200               # admin
     finally:
         with appmod.SUBMISSIONS_LOCK:

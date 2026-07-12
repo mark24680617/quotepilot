@@ -9,6 +9,8 @@ from pydantic import BaseModel
 from quotepilot.profile import CompanyProfile, SellerInfo, TermsConfig, BusinessRules, CatalogItem
 from quotepilot.web.app import app
 
+from conftest import ADMIN_TEST_PASSWORD
+
 
 class MockImportedProfile(BaseModel):
     name_en: str
@@ -20,7 +22,7 @@ class MockImportedProfile(BaseModel):
 
 
 def _admin_headers(client):
-    r = client.post("/api/auth", json={"username": "admin", "password": "88888888"})
+    r = client.post("/api/auth", json={"username": "admin", "password": ADMIN_TEST_PASSWORD})
     return {"Authorization": "Bearer " + r.json()["token"]}
 
 

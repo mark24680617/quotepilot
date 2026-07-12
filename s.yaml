@@ -42,6 +42,7 @@ resources:
         QP_RUNS_DIR: /tmp/runs
         QP_PROFILE_DIR: /tmp/profiles      # per-user company profiles
         QP_USER_STORE: /tmp/users.json     # username -> password hash (admin seeded)
+        QP_ADMIN_PASSWORD: ${env(QP_ADMIN_PASSWORD)}  # secret, never committed (see .env)
         PYTHONPATH: /code/vendor:/code/src
       code: ./
       triggers:

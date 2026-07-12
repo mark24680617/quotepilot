@@ -23,7 +23,10 @@ from fastapi import HTTPException, Request
 from quotepilot import config
 
 ADMIN_USER = "admin"
-ADMIN_PASSWORD = os.getenv("QP_ADMIN_PASSWORD", "88888888")
+# The admin password is injected via the QP_ADMIN_PASSWORD env var (see .env /
+# s.yaml) and is never committed. If it is unset, the admin username is still
+# reserved but cannot be logged into (see _load_users).
+ADMIN_PASSWORD = os.getenv("QP_ADMIN_PASSWORD", "")
 USERNAME_RE = re.compile(r"^[A-Za-z0-9_.-]{3,32}$")
 
 _lock = threading.Lock()
@@ -47,9 +50,12 @@ def _load_users() -> dict:
             users = json.loads(path.read_text(encoding="utf-8"))
         except Exception:
             users = {}
-    if ADMIN_USER not in users:  # always seed admin
+    if ADMIN_USER not in users:  # reserve the admin username
         salt = secrets.token_hex(16)
-        users[ADMIN_USER] = {"salt": salt, "hash": _hash(ADMIN_PASSWORD, salt),
+        # If no admin password is configured, seed an unguessable random one so
+        # the name is taken but login is impossible until QP_ADMIN_PASSWORD is set.
+        seed_pw = ADMIN_PASSWORD or secrets.token_urlsafe(32)
+        users[ADMIN_USER] = {"salt": salt, "hash": _hash(seed_pw, salt),
                              "created_at": datetime.now(timezone.utc).isoformat()}
         _save_users(users)
     return users
