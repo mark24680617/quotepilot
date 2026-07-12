@@ -366,6 +366,7 @@ function setSession(token, username) {
 function clearSession() {
   TOKEN = ""; USERNAME = "";
   try { localStorage.removeItem("QP_TOKEN"); localStorage.removeItem("QP_USER"); } catch (e) {}
+  applyChrome();  // refresh footer + hide nav, symmetric with setSession
 }
 function authHeader() { return TOKEN ? { "Authorization": "Bearer " + TOKEN } : {}; }
 const $ = (s, el) => (el || document).querySelector(s);
