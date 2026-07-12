@@ -16,17 +16,8 @@ from datetime import date
 
 from fastapi import HTTPException, Request
 
-# Shared write token for profile-mutating endpoints. This is DETERRENCE, not
-# auth — the frontend is open source so the token ships in client JS. It stops
-# casual drive-by defacement of the demo profile (an attacker must read the
-# source), while the real backstops stay rate-limit + ephemeral /tmp storage +
-# the prepaid credit cap. Override per-deploy with QP_WRITE_TOKEN.
-WRITE_TOKEN = os.getenv("QP_WRITE_TOKEN", "qp-demo-write-2026")
-
-
-def require_write_token(request: Request) -> None:
-    if request.headers.get("x-qp-write-token", "") != WRITE_TOKEN:
-        raise HTTPException(status_code=403, detail="Missing or invalid write token.")
+# (Profile writes are now protected by real per-user auth in auth.py; the old
+# shared write-token deterrent was removed when login was added.)
 
 # --- input caps ---
 MAX_EMAIL_CHARS = 20_000
@@ -39,7 +30,8 @@ MAX_INFLIGHT = 8       # concurrent pipelines (bounded worker pool)
 LIMITS = {
     "submit": (8, 3600),          # 8 autopilot runs / hour / IP
     "import": (5, 3600),          # 5 website imports / hour / IP
-    "profile_write": (10, 3600),  # 10 profile saves / hour / IP
+    "profile_write": (20, 3600),  # 20 profile saves / hour / IP
+    "auth": (40, 3600),           # login/signup attempts / hour / IP (brute-force brake)
     "decision": (60, 3600),
 }
 

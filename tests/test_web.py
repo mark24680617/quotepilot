@@ -11,6 +11,12 @@ from quotepilot.web.app import WebGate, app
 client = TestClient(app)
 
 
+def auth_headers(username="tester", password="testpass123"):
+    r = client.post("/api/auth", json={"username": username, "password": password})
+    assert r.status_code == 200, r.text
+    return {"Authorization": "Bearer " + r.json()["token"]}
+
+
 def make_quote(severity="info"):
     return QuoteDraft(
         quote_number="LUQ-Q-TEST-0001",
@@ -55,9 +61,12 @@ def test_sample_rejects_bad_names():
 
 
 def test_artifacts_rejects_traversal():
-    assert client.get("/artifacts/../x/quote.html").status_code in (404, 422)
-    assert client.get("/artifacts/20260101-000000-aa/../../.env").status_code in (404, 422)
-    assert client.get("/artifacts/20260101-000000-aa/x.py").status_code == 404
+    h = auth_headers()
+    assert client.get("/artifacts/../x/quote.html", headers=h).status_code in (404, 422)
+    assert client.get("/artifacts/20260101-000000-aa/../../.env", headers=h).status_code in (404, 422)
+    assert client.get("/artifacts/20260101-000000-aa/x.py", headers=h).status_code == 404
+    # unauthenticated -> 401
+    assert client.get("/artifacts/20260101-000000-aa/x.html").status_code == 401
 
 
 def test_unknown_submission_404():
@@ -85,26 +94,77 @@ def test_webgate_approve_roundtrip():
 
 
 def test_api_bootstrap():
-    resp = client.get("/api/bootstrap")
+    assert client.get("/api/bootstrap").status_code == 401  # auth required
+    resp = client.get("/api/bootstrap", headers=auth_headers())
     assert resp.status_code == 200
     data = resp.json()
-    assert "samples" in data
-    assert "submissions" in data
-    assert "archived" in data
+    assert data["user"] == "tester"
     assert "inquiry_zh_1.txt" in data["samples"]
 
 
 def test_api_submit_validation():
-    resp = client.post("/api/submit", json={"email_text": "hi"})
+    resp = client.post("/api/submit", json={"email_text": "hi"}, headers=auth_headers())
     assert resp.status_code == 422
 
 
 def test_api_unknown_submission():
-    resp = client.get("/api/s/nope")
-    assert resp.status_code == 404
-    
-    resp = client.post("/api/s/nope/decision", json={"action": "approve"})
-    assert resp.status_code == 404
+    h = auth_headers()
+    assert client.get("/api/s/nope", headers=h).status_code == 404
+    assert client.post("/api/s/nope/decision", json={"action": "approve"}, headers=h).status_code == 404
+
+
+def test_auth_login_and_signup():
+    # new username auto-creates
+    r1 = client.post("/api/auth", json={"username": "newuser1", "password": "hunter2x"})
+    assert r1.status_code == 200 and r1.json()["username"] == "newuser1"
+    # same username, wrong (but valid-length) password -> 401
+    assert client.post("/api/auth", json={"username": "newuser1", "password": "WRONGPASS"}).status_code == 401
+    # correct password -> 200
+    assert client.post("/api/auth", json={"username": "newuser1", "password": "hunter2x"}).status_code == 200
+    # short password -> 422
+    assert client.post("/api/auth", json={"username": "u2", "password": "x"}).status_code == 422
+    # admin default password works
+    assert client.post("/api/auth", json={"username": "admin", "password": "88888888"}).status_code == 200
+
+
+def test_new_user_gets_blank_profile_admin_gets_luqlabs():
+    admin_h = {"Authorization": "Bearer " + client.post(
+        "/api/auth", json={"username": "admin", "password": "88888888"}).json()["token"]}
+    admin_prof = client.get("/api/profile", headers=admin_h).json()
+    assert admin_prof["seller"]["name_en"]  # LUQ LABS, non-empty
+    assert admin_prof["catalog"]
+
+    new_h = auth_headers("blankco", "blankpass1")
+    blank = client.get("/api/profile", headers=new_h).json()
+    assert blank["seller"]["name_en"] == ""     # blank identity
+    assert blank["catalog"] == []               # empty catalog
+
+
+def test_run_ownership_isolation():
+    from datetime import datetime, timezone
+    from quotepilot.web import app as appmod
+
+    gate = WebGate(on_review=lambda: None)
+    gate.quote = make_quote()
+    sub = appmod.Submission(
+        sid="own-sid", source="test", created_at=datetime.now(timezone.utc),
+        status="awaiting_approval", stages=[], gate=gate, owner_user="alice",
+    )
+    with appmod.SUBMISSIONS_LOCK:
+        appmod.SUBMISSIONS["own-sid"] = sub
+    try:
+        bob = auth_headers("bobuser", "bobpass123")
+        # unauthenticated -> 401
+        assert client.post("/api/s/own-sid/decision", json={"action": "reject"}).status_code == 401
+        # different user -> 403
+        assert client.post("/api/s/own-sid/decision", json={"action": "reject"}, headers=bob).status_code == 403
+        assert client.get("/api/s/own-sid", headers=bob).status_code == 403
+        # owner -> allowed
+        alice = auth_headers("alice", "alicepass1")
+        assert client.post("/api/s/own-sid/decision", json={"action": "reject"}, headers=alice).status_code == 200
+    finally:
+        with appmod.SUBMISSIONS_LOCK:
+            appmod.SUBMISSIONS.pop("own-sid", None)
 
 
 def test_cors_allows_pages_origin_only():
@@ -125,36 +185,12 @@ def test_security_headers_present():
 
 
 def test_submit_rejects_oversize_and_short():
-    assert client.post("/api/submit", json={"email_text": "hi"}).status_code == 422
+    h = auth_headers()
+    assert client.post("/api/submit", json={"email_text": "hi"}, headers=h).status_code == 422
     huge = "A" * 25_000
-    assert client.post("/api/submit", json={"email_text": huge}).status_code == 422
-
-
-def test_owner_token_enforced_on_mutations():
-    from datetime import datetime, timezone
-    from quotepilot.web import app as appmod
-
-    gate = WebGate(on_review=lambda: None)
-    gate.quote = make_quote()
-    sub = appmod.Submission(
-        sid="unit-sid", source="test", created_at=datetime.now(timezone.utc),
-        status="awaiting_approval", stages=[], gate=gate, owner_token="secret-tok",
-    )
-    with appmod.SUBMISSIONS_LOCK:
-        appmod.SUBMISSIONS["unit-sid"] = sub
-    try:
-        # no token -> 403
-        assert client.post("/api/s/unit-sid/decision", json={"action": "reject"}).status_code == 403
-        # wrong token -> 403
-        assert client.post("/api/s/unit-sid/decision", json={"action": "reject"},
-                           headers={"X-QP-Owner-Token": "nope"}).status_code == 403
-        # correct token -> processed (reject succeeds)
-        ok = client.post("/api/s/unit-sid/decision", json={"action": "reject"},
-                         headers={"X-QP-Owner-Token": "secret-tok"})
-        assert ok.status_code == 200
-    finally:
-        with appmod.SUBMISSIONS_LOCK:
-            appmod.SUBMISSIONS.pop("unit-sid", None)
+    assert client.post("/api/submit", json={"email_text": huge}, headers=h).status_code == 422
+    # unauthenticated submit -> 401
+    assert client.post("/api/submit", json={"email_text": "x" * 50}).status_code == 401
 
 
 def test_rate_limit_and_daily_gate():

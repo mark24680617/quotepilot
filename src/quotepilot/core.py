@@ -24,14 +24,19 @@ def assemble_quote_draft(
     raw_email: str,
     usage: llm.UsageTracker | None = None,
     on_stage=None,
+    profile: CompanyProfile | None = None,
 ) -> tuple[QuoteDraft, "Inquiry"]:
-    """Run stages intake → fx → pricing → risk → drafting; return (draft, inquiry)."""
+    """Run stages intake → fx → pricing → risk → drafting; return (draft, inquiry).
+
+    `profile` is the seller's CompanyProfile (per-user). Defaults to load_profile().
+    """
 
     def note(stage: str) -> None:
         if on_stage:
             on_stage(stage)
 
-    profile = load_profile()
+    if profile is None:
+        profile = load_profile()
     inquiry = intake.parse_inquiry(raw_email, profile, usage)
     note("intake")
     rate = fx.get_usd_cny()

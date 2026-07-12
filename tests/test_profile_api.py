@@ -19,75 +19,61 @@ class MockImportedProfile(BaseModel):
     products: list = []
 
 
+def _admin_headers(client):
+    r = client.post("/api/auth", json={"username": "admin", "password": "88888888"})
+    return {"Authorization": "Bearer " + r.json()["token"]}
+
+
 def test_get_profile():
     client = TestClient(app)
-    response = client.get("/api/profile")
+    assert client.get("/api/profile").status_code == 401  # auth required
+    response = client.get("/api/profile", headers=_admin_headers(client))
     assert response.status_code == 200
-    
     data = response.json()
-    assert "seller" in data
     assert isinstance(data["seller"]["name_en"], str)
-    assert len(data["seller"]["name_en"]) > 0
-    assert "catalog" in data
+    assert len(data["seller"]["name_en"]) > 0   # admin -> LUQ LABS
     assert isinstance(data["catalog"], list)
 
 
 def test_put_roundtrip(monkeypatch, tmp_path):
-    monkeypatch.setenv("QP_PROFILE_STORE", str(tmp_path / "p.json"))
-    
+    monkeypatch.setenv("QP_PROFILE_DIR", str(tmp_path / "profiles"))
     client = TestClient(app)
-    
-    # Get current profile
-    response = client.get("/api/profile")
-    assert response.status_code == 200
-    current_data = response.json()
-    
-    # Modify the name
-    current_data["seller"]["name_en"] = "Acme Ltd"
+    hdr = _admin_headers(client)
 
-    from quotepilot.web.guard import WRITE_TOKEN
-    hdr = {"X-QP-Write-Token": WRITE_TOKEN}
-    # PUT the modified profile (write token required)
+    current_data = client.get("/api/profile", headers=hdr).json()
+    current_data["seller"]["name_en"] = "Acme Ltd"
     response = client.put("/api/profile", json=current_data, headers=hdr)
     assert response.status_code == 200
-    result = response.json()
-    assert result["ok"] is True
-    assert "saved_to" in result
-    
-    # GET again to verify the change
-    response = client.get("/api/profile")
-    assert response.status_code == 200
-    updated_data = response.json()
-    assert updated_data["seller"]["name_en"] == "Acme Ltd"
+    assert response.json()["ok"] is True
+
+    updated = client.get("/api/profile", headers=hdr).json()
+    assert updated["seller"]["name_en"] == "Acme Ltd"
 
 
 def test_put_invalid():
     client = TestClient(app)
-    from quotepilot.web.guard import WRITE_TOKEN
-
-    # Invalid data with a valid token -> 422
-    response = client.put("/api/profile", json={"seller": {}}, headers={"X-QP-Write-Token": WRITE_TOKEN})
+    # Invalid data with auth -> 422
+    response = client.put("/api/profile", json={"seller": {}}, headers=_admin_headers(client))
     assert response.status_code == 422
 
 
-def test_write_endpoints_require_token():
+def test_write_endpoints_require_auth():
     client = TestClient(app)
-    valid = client.get("/api/profile").json()  # a valid CompanyProfile body
-    # Valid body but NO token -> 403 on every profile-mutating endpoint
-    assert client.put("/api/profile", json=valid).status_code == 403
-    assert client.post("/api/profile/save", json=valid).status_code == 403
-    assert client.post("/api/profile/import", json={"url": "https://example.com"}).status_code == 403
-    # Wrong token -> 403
-    assert client.put("/api/profile", json=valid, headers={"X-QP-Write-Token": "nope"}).status_code == 403
+    valid = client.get("/api/profile", headers=_admin_headers(client)).json()
+    # No auth -> 401 on every profile endpoint
+    assert client.get("/api/profile").status_code == 401
+    assert client.put("/api/profile", json=valid).status_code == 401
+    assert client.post("/api/profile/save", json=valid).status_code == 401
+    assert client.post("/api/profile/import", json={"url": "https://example.com"}).status_code == 401
+    # Bogus token -> 401
+    assert client.put("/api/profile", json=valid, headers={"Authorization": "Bearer nope"}).status_code == 401
 
 
 def test_import_with_invalid_scheme():
     client = TestClient(app)
-    from quotepilot.web.guard import WRITE_TOKEN
-
-    # ftp URL with a valid token -> 422 (scheme rejected)
+    # ftp URL, authenticated -> 422 (scheme rejected)
     response = client.post("/api/profile/import", json={"url": "ftp://x"},
-                           headers={"X-QP-Write-Token": WRITE_TOKEN})
+                           headers=_admin_headers(client))
     assert response.status_code == 422
 
 

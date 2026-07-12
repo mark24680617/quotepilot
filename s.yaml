@@ -40,7 +40,8 @@ resources:
         QWEN_API_KEY: ${env(QWEN_API_KEY)}
         QWEN_BASE_URL: https://dashscope-intl.aliyuncs.com/compatible-mode/v1
         QP_RUNS_DIR: /tmp/runs
-        QP_PROFILE_STORE: /tmp/profile.json
+        QP_PROFILE_DIR: /tmp/profiles      # per-user company profiles
+        QP_USER_STORE: /tmp/users.json     # username -> password hash (admin seeded)
         PYTHONPATH: /code/vendor:/code/src
       code: ./
       triggers:

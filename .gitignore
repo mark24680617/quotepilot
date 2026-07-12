@@ -31,3 +31,6 @@ scratch_video/
 
 # Claude Code internal artifacts
 .claude/
+
+data/users.local.json
+data/profiles.local/

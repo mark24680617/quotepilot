@@ -22,7 +22,7 @@ from quotepilot.hitl import summarize
 from quotepilot.models import Decision, QuoteDraft, RunResult
 from quotepilot.orchestrator import run_autopilot
 from quotepilot.stages.render import render_quote_html
-from quotepilot.web import guard
+from quotepilot.web import auth, guard
 
 logger = logging.getLogger("quotepilot.web")
 
@@ -88,7 +88,7 @@ class Submission:
     status: str
     stages: list[str]
     gate: WebGate
-    owner_token: str = ""  # required to edit/approve/reject this run (never listed)
+    owner_user: str = ""  # the logged-in user who started this run
     result: RunResult | None = None
     error: str | None = None
 
@@ -101,12 +101,10 @@ _INFLIGHT = threading.BoundedSemaphore(guard.MAX_INFLIGHT)
 
 
 def _require_owner(request: Request, sub: Submission) -> None:
-    token = request.headers.get("x-qp-owner-token", "")
-    if not sub.owner_token or token != sub.owner_token:
-        raise HTTPException(
-            status_code=403,
-            detail="You can only edit or decide runs you started (owner token missing/mismatch).",
-        )
+    """Only the run's owner (or admin) may edit/approve/reject it."""
+    user = auth.current_user(request)
+    if user != sub.owner_user and user != auth.ADMIN_USER:
+        raise HTTPException(status_code=403, detail="You can only edit or decide your own runs.")
 
 
 def _evict_old_submissions() -> None:
@@ -195,22 +193,26 @@ def sub_view(sub: Submission) -> dict[str, Any]:
     }
 
 
-def _gather_dashboard_data():
-    """Gather data for both dashboard and API bootstrap endpoint"""
+def _gather_dashboard_data(user: str | None = None):
+    """Gather data for the API bootstrap endpoint, scoped to one user's runs."""
     with SUBMISSIONS_LOCK:
-        submissions_list = list(SUBMISSIONS.values())
-    
+        submissions_list = [
+            s for s in SUBMISSIONS.values()
+            if user is None or s.owner_user == user
+        ]
+
     # Sort by creation time, newest first
     submissions_list.sort(key=lambda x: x.created_at, reverse=True)
-    
-    # Get archived runs
+
+    # Archived runs (from disk) aren't user-tagged; only admin sees them.
     archived = []
-    try:
-        from quotepilot.web.runs_index import list_runs
-        archived = list_runs(RUNS_DIR)
-    except ImportError:
-        pass  # If runs_index is not available, return empty list
-    
+    if user is None or user == auth.ADMIN_USER:
+        try:
+            from quotepilot.web.runs_index import list_runs
+            archived = list_runs(RUNS_DIR)
+        except ImportError:
+            pass
+
     # Get sample files
     samples_dir = DATA_DIR / "samples"
     samples = []
@@ -227,23 +229,25 @@ def _gather_dashboard_data():
     }
 
 
-def _start_submission(email_text: str) -> tuple[str, str]:
-    """Start a new submission. Returns (sid, owner_token).
+def _start_submission(email_text: str, user: str) -> str:
+    """Start a new submission for `user`. Returns the sid.
 
     The daily global cap is checked BEFORE any model call; if a worker slot
     isn't free we refuse rather than pile up threads.
     """
+    from quotepilot.profile import load_profile
+
     guard.daily_gate("submit")  # 429 if the demo's daily model budget is spent
     if not _INFLIGHT.acquire(blocking=False):
         raise HTTPException(status_code=429, detail="Server busy — too many runs in flight. Try again shortly.")
 
+    profile = load_profile(user)  # the seller runs against THEIR own company profile
     sid = uuid4().hex[:12]
-    owner_token = secrets.token_urlsafe(12)
     gate = WebGate(on_review=lambda: update_submission_status(sid, "awaiting_approval"))
 
     submission = Submission(
         sid=sid, source="web", created_at=datetime.now(timezone.utc),
-        status="running", stages=[], gate=gate, owner_token=owner_token,
+        status="running", stages=[], gate=gate, owner_user=user,
     )
     with SUBMISSIONS_LOCK:
         SUBMISSIONS[sid] = submission
@@ -258,7 +262,7 @@ def _start_submission(email_text: str) -> tuple[str, str]:
 
             result = run_autopilot(
                 raw_email=email_text, gate=gate, runs_dir=RUNS_DIR,
-                source_name=f"web_{sid}", progress=progress_callback,
+                source_name=f"web_{sid}", progress=progress_callback, profile=profile,
             )
             with SUBMISSIONS_LOCK:
                 if sid in SUBMISSIONS:
@@ -275,7 +279,7 @@ def _start_submission(email_text: str) -> tuple[str, str]:
             _INFLIGHT.release()
 
     threading.Thread(target=process_submission, daemon=True).start()
-    return sid, owner_token
+    return sid
 
 
 def _goto(url: str) -> HTMLResponse:
@@ -324,13 +328,35 @@ async def dashboard(request: Request):
     return templates.TemplateResponse(request, "dashboard.html", context)
 
 
+class AuthRequest(BaseModel):
+    username: str
+    password: str
+
+
+@app.post("/api/auth")
+async def api_auth(request: Request, body: AuthRequest):
+    """Login or auto-signup: unknown username creates an account."""
+    guard.rate_limit(request, "auth")
+    token = auth.authenticate(body.username, body.password)
+    return {"token": token, "username": body.username.strip()}
+
+
+@app.post("/api/logout")
+async def api_logout(request: Request):
+    auth.logout(request.headers.get("authorization", "").removeprefix("Bearer ").strip()
+                or request.headers.get("x-qp-token", "").strip())
+    return {"ok": True}
+
+
 @app.get("/api/bootstrap")
-async def api_bootstrap():
-    data = _gather_dashboard_data()
+async def api_bootstrap(request: Request):
+    user = auth.current_user(request)
+    data = _gather_dashboard_data(user)
     return {
+        "user": user,
         "samples": data["samples"],
         "submissions": data["submissions"],
-        "archived": data["archived"]
+        "archived": data["archived"],
     }
 
 
@@ -340,22 +366,26 @@ class SubmitRequest(BaseModel):
 
 @app.post("/api/submit")
 async def api_submit(request: Request, body: SubmitRequest):
+    user = auth.current_user(request)
     guard.rate_limit(request, "submit")
     email_text = body.email_text.strip()
     if len(email_text) < 20:
         raise HTTPException(status_code=422, detail="Email text too short")
-    sid, token = _start_submission(email_text)
-    return {"sid": sid, "token": token}
+    sid = _start_submission(email_text, user)
+    return {"sid": sid}
 
 
 @app.get("/api/s/{sid}")
-async def api_get_submission(sid: str):
+async def api_get_submission(sid: str, request: Request):
+    user = auth.current_user(request)
     with SUBMISSIONS_LOCK:
         submission = SUBMISSIONS.get(sid)
-    
+
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
-    
+    if submission.owner_user != user and user != auth.ADMIN_USER:
+        raise HTTPException(status_code=403, detail="Not your run")
+
     summary = None
     if submission.status == "awaiting_approval" and submission.gate.quote:
         summary = summarize(submission.gate.quote)
@@ -456,11 +486,12 @@ async def get_sample(name: str):
 
 @app.post("/submit")
 async def submit_email(request: Request, email_text: str = Form(..., min_length=20, max_length=guard.MAX_EMAIL_CHARS)):
+    user = auth.current_user(request)
     guard.rate_limit(request, "submit")
     email_text = email_text.strip()
     if len(email_text) < 20:
         raise HTTPException(status_code=422, detail="Email text too short")
-    sid, _token = _start_submission(email_text)
+    sid = _start_submission(email_text, user)
     return _goto(f"/s/{sid}")
 
 
@@ -491,30 +522,32 @@ async def get_submission(request: Request, sid: str):
 
 
 @app.get("/s/{sid}/state")
-async def get_submission_state(sid: str):
+async def get_submission_state(sid: str, request: Request):
+    user = auth.current_user(request)
     with SUBMISSIONS_LOCK:
         submission = SUBMISSIONS.get(sid)
-    
+
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
-    
-    return {
-        "status": submission.status,
-        "stages": submission.stages
-    }
+    if submission.owner_user != user and user != auth.ADMIN_USER:
+        raise HTTPException(status_code=403, detail="Not your run")
+
+    return {"status": submission.status, "stages": submission.stages}
 
 
 @app.get("/s/{sid}/preview", response_class=HTMLResponse)
-async def get_preview(sid: str):
+async def get_preview(sid: str, request: Request):
+    user = auth.current_user(request)
     with SUBMISSIONS_LOCK:
         submission = SUBMISSIONS.get(sid)
-    
+
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
-    
+    if submission.owner_user != user and user != auth.ADMIN_USER:
+        raise HTTPException(status_code=403, detail="Not your run")
     if not submission.gate.quote:
         raise HTTPException(status_code=404, detail="Quote not available yet")
-    
+
     html_content = render_quote_html(submission.gate.quote)
     return HTMLResponse(content=html_content)
 
@@ -545,7 +578,8 @@ async def make_decision(request: Request, sid: str, action: str = Form(...), not
 
 
 @app.get("/artifacts/{run_id}/{filename}")
-async def get_artifact(run_id: str, filename: str):
+async def get_artifact(run_id: str, filename: str, request: Request):
+    auth.current_user(request)  # any signed-in user
     # Validate run_id and filename formats
     if not re.match(r'^[0-9\-a-f]+$', run_id):
         raise HTTPException(status_code=404, detail="Invalid run ID")

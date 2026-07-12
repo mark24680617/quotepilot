@@ -45,30 +45,56 @@ class CompanyProfile(BaseModel):
 
 
 DEFAULT_PROFILE_PATH = config.DATA_DIR / "company_profile.json"
+ADMIN_USER = "admin"  # the seeded account that owns the bundled LUQ LABS profile
 
 
-def _store_path() -> Path:
-    """Writable store location: env override (e.g. /tmp/profile.json on FC),
-    else a gitignored local file — the bundled default is never overwritten."""
-    raw = os.getenv("QP_PROFILE_STORE")
-    return Path(raw) if raw else config.DATA_DIR / "company_profile.local.json"
+def _profiles_dir() -> Path:
+    raw = os.getenv("QP_PROFILE_DIR")
+    return Path(raw) if raw else config.DATA_DIR / "profiles.local"
 
 
-def load_profile() -> CompanyProfile:
-    store = _store_path()
+def _store_path(username: str | None = None) -> Path:
+    """Per-user writable store; the single-store env override still works for
+    back-compat (used by the CLI and tests)."""
+    if username is None:
+        raw = os.getenv("QP_PROFILE_STORE")
+        return Path(raw) if raw else config.DATA_DIR / "company_profile.local.json"
+    return _profiles_dir() / f"{username}.json"
+
+
+def blank_profile() -> CompanyProfile:
+    """An empty company profile — what every non-admin user starts with."""
+    return CompanyProfile(
+        seller=SellerInfo(name_en="", name_zh="", jurisdiction_en="", jurisdiction_zh="",
+                          website="", email="", description=""),
+        terms=TermsConfig(payment_en="", payment_zh="", legal_en="", legal_zh="",
+                          tax_note_en="", tax_note_zh=""),
+        rules=BusinessRules(),  # sensible numeric defaults
+        catalog=[],
+    )
+
+
+def _bundled_default() -> CompanyProfile:
+    return CompanyProfile.model_validate_json(DEFAULT_PROFILE_PATH.read_text(encoding="utf-8"))
+
+
+def load_profile(username: str | None = None) -> CompanyProfile:
+    store = _store_path(username)
     if store.exists():
         try:
             return CompanyProfile.model_validate_json(store.read_text(encoding="utf-8"))
         except Exception:
-            pass  # corrupt store falls back to the bundled default
-    return CompanyProfile.model_validate_json(
-        DEFAULT_PROFILE_PATH.read_text(encoding="utf-8")
-    )
+            pass  # corrupt store falls back below
+    # No saved profile yet: admin (and the anonymous/CLI default) get LUQ LABS;
+    # every other user starts blank.
+    if username is None or username == ADMIN_USER:
+        return _bundled_default()
+    return blank_profile()
 
 
-def save_profile(profile: CompanyProfile) -> Path:
-    """Persist atomically to the writable store (never the bundled default)."""
-    dest = _store_path()
+def save_profile(profile: CompanyProfile, username: str | None = None) -> Path:
+    """Persist atomically to the (per-user) writable store; never the bundled default."""
+    dest = _store_path(username)
     dest.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp_name = tempfile.mkstemp(dir=dest.parent, suffix=".tmp")
     tmp = Path(tmp_name)

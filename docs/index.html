@@ -38,6 +38,12 @@ input,textarea,select{font-family:inherit;font-size:14px;color:var(--ink)}
 h1{font-size:26px;line-height:1.3;letter-spacing:-.01em}
 h2{font-size:17px;font-weight:700}
 h2 .ann{font-size:12.5px;margin-left:8px;letter-spacing:.02em}
+.info-ico{display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;margin-left:8px;border-radius:50%;border:1px solid var(--line);background:var(--blue-ghost);color:var(--blue);font:italic 700 11px/1 Georgia,"Times New Roman",serif;cursor:help;position:relative;vertical-align:middle}
+.info-ico:hover,.info-ico:focus-visible{border-color:var(--blue);background:var(--blue-tint);outline:none}
+.info-ico::after{content:attr(data-tip);position:absolute;left:0;top:calc(100% + 9px);width:288px;max-width:74vw;background:var(--ink);color:#fff;padding:10px 12px;border-radius:10px;font:400 12px/1.55 var(--sans);box-shadow:var(--shadow-lg);opacity:0;visibility:hidden;transform:translateY(-3px);transition:opacity .13s,transform .13s;z-index:60;pointer-events:none;text-align:left;white-space:normal}
+.info-ico::before{content:"";position:absolute;left:11px;top:calc(100% + 3px);border:6px solid transparent;border-bottom-color:var(--ink);opacity:0;visibility:hidden;transition:opacity .13s;z-index:61}
+.info-ico:hover::after,.info-ico:focus-visible::after{opacity:1;visibility:visible;transform:translateY(0)}
+.info-ico:hover::before,.info-ico:focus-visible::before{opacity:1;visibility:visible}
 .sub{color:var(--muted);font-size:13.5px;margin-top:4px}
 .sub .ann{color:var(--faint)}
 :lang(zh) h1,:lang(zh) h2{letter-spacing:0}
@@ -328,6 +334,7 @@ main{flex:1;width:100%}
     <nav class="nav">
       <a href="#/" data-nav="dash" id="navDash"></a>
       <a href="#/settings" data-nav="settings" id="navSettings"></a>
+      <a href="#" id="navLogout" class="nav-logout"></a>
     </nav>
   </div>
 </header>
@@ -348,14 +355,31 @@ main{flex:1;width:100%}
 "use strict";
 /* ================= Core ================= */
 const API = localStorage.getItem("QP_API") || "https://quotepilot-kafogbnbjc.ap-southeast-1.fcapp.run";
-// Shared write token for profile-mutating calls — deterrence only (this file is
-// public), backed by rate-limit + ephemeral storage server-side.
-const WRITE_TOKEN = "qp-demo-write-2026";
+let TOKEN = localStorage.getItem("QP_TOKEN") || "";
+let USERNAME = localStorage.getItem("QP_USER") || "";
+function setSession(token, username) {
+  TOKEN = token || ""; USERNAME = username || "";
+  try { localStorage.setItem("QP_TOKEN", TOKEN); localStorage.setItem("QP_USER", USERNAME); } catch (e) {}
+  applyChrome();
+}
+function clearSession() {
+  TOKEN = ""; USERNAME = "";
+  try { localStorage.removeItem("QP_TOKEN"); localStorage.removeItem("QP_USER"); } catch (e) {}
+}
+function authHeader() { return TOKEN ? { "Authorization": "Bearer " + TOKEN } : {}; }
 const $ = (s, el) => (el || document).querySelector(s);
 const $$ = (s, el) => Array.from((el || document).querySelectorAll(s));
 const app = document.getElementById("app");
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+// The bilingual auto-complete rule, surfaced via the ⓘ icon on settings sections.
+const autoTranslateRule = () => L(
+  "Fill in just one language — on Save, a Qwen agent auto-translates the missing side. Legal terms are the one exception: they are never AI-translated.",
+  "只需填写一种语言——保存时 Qwen 智能体会自动补齐缺失的另一种。唯一例外是法律条款：绝不会经 AI 翻译。"
+);
+function infoIcon(tip) {
+  return `<span class="info-ico" tabindex="0" role="note" aria-label="${esc(tip)}" data-tip="${esc(tip)}">i</span>`;
+}
 
 /* ---- language ---- */
 let LANG = localStorage.getItem("QP_LANG") || "en";
@@ -370,23 +394,26 @@ function setLang(v) {
 function applyChrome() {
   document.documentElement.lang = LANG === "zh" ? "zh-CN" : "en";
   $("#brandTag").textContent = L("Quote autopilot", "报价领航");
-  $("#navDash").textContent = L("Dashboard", "工作台");
-  $("#navSettings").textContent = L("Settings", "设置");
-  $("#footBrand").textContent = L("QuotePilot · Agent powered by Qwen", "QuotePilot · 智能体由通义千问驱动");
+  const nav = document.querySelector(".nav");
+  if (nav) nav.hidden = !TOKEN;  // hide nav until signed in
+  const nd = $("#navDash"); if (nd) nd.textContent = L("Dashboard", "工作台");
+  const ns = $("#navSettings"); if (ns) ns.textContent = L("Settings", "设置");
+  const nl = $("#navLogout"); if (nl) nl.textContent = USERNAME ? L("Sign out", "退出") : "";
+  const fb = $("#footBrand");
+  if (fb) fb.textContent = USERNAME
+    ? L("Signed in as ", "当前用户：") + USERNAME
+    : L("QuotePilot · Agent powered by Qwen", "QuotePilot · 智能体由通义千问驱动");
 }
-
-// Owner tokens bind edit/approve/reject to the tab that started the run.
-function saveTok(sid, tok) { try { sessionStorage.setItem("qp_tok_" + sid, tok || ""); } catch (e) {} }
-function getTok(sid) { try { return sessionStorage.getItem("qp_tok_" + sid) || ""; } catch (e) { return ""; } }
 
 async function jfetch(path, opts) {
   opts = opts || {};
-  const o = Object.assign({}, opts, { headers: Object.assign({ "Content-Type": "application/json" }, opts.headers || {}) });
+  const o = Object.assign({}, opts, { headers: Object.assign({ "Content-Type": "application/json" }, authHeader(), opts.headers || {}) });
   const r = await fetch(API + path, o);
   const txt = await r.text();
   let body = null;
   try { body = txt ? JSON.parse(txt) : null; } catch (e) { body = txt; }
   if (!r.ok) {
+    if (r.status === 401 && path !== "/api/auth") { clearSession(); renderAuth(); }
     const msg = (body && typeof body === "object" && (body.detail || body.error || body.message)) || ("HTTP " + r.status);
     const err = new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
     err.status = r.status; err.body = body;
@@ -451,13 +478,55 @@ function setNav(name) {
 }
 function route() {
   const ep = ++EPOCH;
-  const h = location.hash || "#/";
   window.scrollTo(0, 0);
+  if (!TOKEN) { renderAuth(); return; }   // login gate — everything requires a session
+  const h = location.hash || "#/";
   if (h.startsWith("#/s/")) viewRun(decodeURIComponent(h.slice(4).split("?")[0]), ep);
   else if (h.startsWith("#/settings")) viewSettings(ep);
   else viewDash(ep);
 }
 window.addEventListener("hashchange", route);
+
+/* ================= Auth ================= */
+function renderAuth() {
+  EPOCH++;  // abort any in-flight view render (e.g. after a mid-session 401)
+  setNav("");
+  const nav = document.querySelector(".nav"); if (nav) nav.hidden = true;
+  app.innerHTML = `<div class="view" style="max-width:400px;margin:6vh auto 0">
+    <div class="card card-pad">
+      <h1 style="font-size:22px">${esc(L("Sign in to QuotePilot", "登录 QuotePilot"))}</h1>
+      <p class="sub" style="margin-top:6px">${esc(L("New username? An account is created automatically.", "用户名不存在时将自动为你创建账号。"))}</p>
+      <div class="grid2" style="grid-template-columns:1fr;margin-top:18px">
+        <label class="fld"><span>${esc(L("Username", "用户名"))}</span>
+          <input id="authUser" autocomplete="username" placeholder="${esc(L("3–32 chars", "3–32 位"))}"></label>
+        <label class="fld"><span>${esc(L("Password", "密码"))}</span>
+          <input id="authPass" type="password" autocomplete="current-password" placeholder="${esc(L("min 6 chars", "至少 6 位"))}"></label>
+      </div>
+      <p class="char-hint" id="authHint" style="margin-top:10px;min-height:16px"></p>
+      <button class="btn btn-pri btn-big" id="authBtn" style="margin-top:6px;width:100%">${esc(L("Continue", "继续"))}</button>
+    </div>
+  </div>`;
+  const user = $("#authUser"), pass = $("#authPass"), hint = $("#authHint"), btn = $("#authBtn");
+  async function go() {
+    const u = user.value.trim(), p = pass.value;
+    if (u.length < 3 || p.length < 6) { hint.className = "char-hint bad"; hint.textContent = L("Username ≥3 and password ≥6 characters.", "用户名至少 3 位、密码至少 6 位。"); return; }
+    btn.disabled = true; btn.innerHTML = '<span class="spin"></span>' + esc(L("Signing in…", "登录中…"));
+    try {
+      const r = await jfetch("/api/auth", { method: "POST", body: JSON.stringify({ username: u, password: p }) });
+      setSession(r.token, r.username);
+      location.hash = "#/";
+      route();
+    } catch (e) {
+      btn.disabled = false; btn.textContent = L("Continue", "继续");
+      hint.className = "char-hint bad";
+      hint.textContent = e.status === 401 ? L("Wrong password for this username.", "该用户名密码错误。") : (L("Sign-in failed: ", "登录失败：") + e.message);
+    }
+  }
+  btn.addEventListener("click", go);
+  pass.addEventListener("keydown", e => { if (e.key === "Enter") go(); });
+  user.focus();
+}
+function logout() { clearSession(); location.hash = "#/"; renderAuth(); }
 
 function errorCard(title, e, retryHash) {
   return `<section class="card center-card view">
@@ -566,7 +635,7 @@ function renderDash(ep) {
     if (!chip) return;
     chip.classList.add("loading");
     try {
-      const r = await fetch(API + "/sample/" + encodeURIComponent(chip.dataset.sample));
+      const r = await fetch(API + "/sample/" + encodeURIComponent(chip.dataset.sample), { headers: authHeader() });
       if (!r.ok) throw new Error("HTTP " + r.status);
       let t = await r.text();
       try { const j = JSON.parse(t); t = j.email_text || j.text || j.body || t; } catch (err) {}
@@ -598,7 +667,6 @@ function renderDash(ep) {
     btn.innerHTML = '<span class="spin"></span>' + esc(L("Handing off…", "正在移交智能体…"));
     try {
       const r = await jfetch("/api/submit", { method: "POST", body: JSON.stringify({ email_text: txt }) });
-      saveTok(r.sid, r.token);
       location.hash = "#/s/" + encodeURIComponent(r.sid);
     } catch (e) {
       btn.disabled = false;
@@ -645,11 +713,11 @@ async function openArchivedQuote(item, btn) {
     let html = null;
     const art = (item.artifacts || []).find(x => /\.html?$/i.test(x.filename || "")) || (item.artifacts || []).find(x => /quote|html/i.test(x.kind || ""));
     if (art) {
-      const r = await fetch(`${API}/artifacts/${encodeURIComponent(art.run_id)}/${encodeURIComponent(art.filename)}`);
+      const r = await fetch(`${API}/artifacts/${encodeURIComponent(art.run_id)}/${encodeURIComponent(art.filename)}`, { headers: authHeader() });
       if (!r.ok) throw new Error("HTTP " + r.status);
       html = await r.text();
     } else if (item.sid) {
-      const r = await fetch(`${API}/s/${encodeURIComponent(item.sid)}/preview`);
+      const r = await fetch(`${API}/s/${encodeURIComponent(item.sid)}/preview`, { headers: authHeader() });
       if (!r.ok) throw new Error("HTTP " + r.status);
       html = await r.text();
     } else throw new Error("no artifact");
@@ -835,7 +903,7 @@ function statsHTML(s) {
 function loadPreview(sid, ep) {
   const holder = document.getElementById("previewHolder");
   if (!holder) return;
-  fetch(`${API}/s/${encodeURIComponent(sid)}/preview`)
+  fetch(`${API}/s/${encodeURIComponent(sid)}/preview`, { headers: authHeader() })
     .then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); })
     .then(t => {
       if (ep !== EPOCH) return;
@@ -858,7 +926,7 @@ function loadPreview(sid, ep) {
 function renderAwaiting(sid, s, summary, ep) {
   const flags = s.risk_flags || [];
   const blocked = flags.some(f => f.severity === "block");
-  const owned = !!getTok(sid);  // only the tab that started this run can act
+  const owned = true;  // dashboard only lists the signed-in user's own runs; backend enforces ownership
   app.innerHTML = `<div class="view">${runHeader(sid, s)}
     <section class="gate">
       <div class="gate-band">
@@ -920,7 +988,7 @@ function renderAwaiting(sid, s, summary, ep) {
     const orig = btn.textContent;
     btn.innerHTML = '<span class="spin"></span>' + esc(action === "approve" ? L("Issuing…", "出具中…") : L("Rejecting…", "驳回中…"));
     try {
-      await jfetch(`/api/s/${encodeURIComponent(sid)}/decision`, { method: "POST", headers: { "X-QP-Owner-Token": getTok(sid) }, body: JSON.stringify({ action, notes: (document.getElementById("notes") || {}).value || "" }) });
+      await jfetch(`/api/s/${encodeURIComponent(sid)}/decision`, { method: "POST", body: JSON.stringify({ action, notes: (document.getElementById("notes") || {}).value || "" }) });
       toast(action === "approve" ? L("Approved — issuing the quote", "已批准，正在出具报价单") : L("Rejected", "已驳回"), action === "approve" ? "ok" : undefined);
       viewRun(sid, ep);
     } catch (e) {
@@ -1061,7 +1129,7 @@ async function recalcQuote(sid, ep) {
   const orig = btn.textContent;
   btn.disabled = true; btn.innerHTML = '<span class="spin"></span>' + esc(L("Recalculating…", "重新计算中…"));
   try {
-    const res = await jfetch(`/api/s/${encodeURIComponent(sid)}/edit`, { method: "POST", headers: { "X-QP-Owner-Token": getTok(sid) }, body: JSON.stringify(collectEdits()) });
+    const res = await jfetch(`/api/s/${encodeURIComponent(sid)}/edit`, { method: "POST", body: JSON.stringify(collectEdits()) });
     if (ep !== EPOCH) return;
     const s2 = res.s || {};
     const u = document.getElementById("stTotalUsd"); if (u) u.textContent = fmtUSD(s2.total_usd);
@@ -1112,7 +1180,7 @@ async function openArtifact(a, btn) {
   if (!a) return;
   if (btn) btn.classList.add("loading");
   try {
-    const r = await fetch(`${API}/artifacts/${encodeURIComponent(a.run_id)}/${encodeURIComponent(a.filename)}`);
+    const r = await fetch(`${API}/artifacts/${encodeURIComponent(a.run_id)}/${encodeURIComponent(a.filename)}`, { headers: authHeader() });
     if (!r.ok) throw new Error("HTTP " + r.status);
     const fn = a.filename || "artifact";
     if (/\.html?$/i.test(fn)) {                        // render safely, never execute
@@ -1272,7 +1340,7 @@ function renderSettings(ep, importNote) {
     </section>
 
     <section class="card card-pad" style="margin-top:18px">
-      <h2>${esc(L("Company", "公司信息"))}</h2>
+      <h2>${esc(L("Company", "公司信息"))}${infoIcon(autoTranslateRule())}</h2>
       <div class="grid2" id="companyGrid">
         ${fld(L("Name (EN)", "公司名称（英）"), "seller.name_en", s.name_en)}
         ${fld(L("Name (ZH)", "公司名称（中）"), "seller.name_zh", s.name_zh)}
@@ -1285,7 +1353,7 @@ function renderSettings(ep, importNote) {
     </section>
 
     <section class="card card-pad" style="margin-top:18px">
-      <h2>${esc(L("Terms", "条款"))}</h2>
+      <h2>${esc(L("Terms", "条款"))}${infoIcon(autoTranslateRule())}</h2>
       <div class="grid2" style="margin-top:16px">
         ${fldArea(L("Payment (EN)", "付款条款（英）"), "terms.payment_en", t.payment_en)}
         ${fldArea(L("Payment (ZH)", "付款条款（中）"), "terms.payment_zh", t.payment_zh)}
@@ -1309,7 +1377,7 @@ function renderSettings(ep, importNote) {
 
     <section class="card card-pad" style="margin-top:18px">
       <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap">
-        <h2>${esc(L("Catalog", "产品目录"))}</h2>
+        <h2>${esc(L("Catalog", "产品目录"))}${infoIcon(autoTranslateRule())}</h2>
         <button class="btn btn-ghost btn-sm" id="addItem">＋ ${esc(L("Add item", "添加产品"))}</button>
       </div>
       <p class="sub">${L('Volume discounts use compact syntax: <code class="mono" style="font-size:11.5px;background:var(--blue-ghost);padding:2px 6px;border-radius:5px">50:8, 100:12</code> = 8% off from 50 units, 12% off from 100.', '阶梯折扣使用紧凑语法：<code class="mono" style="font-size:11.5px;background:var(--blue-ghost);padding:2px 6px;border-radius:5px">50:8, 100:12</code> 表示满 50 件减 8%、满 100 件减 12%。')}</p>
@@ -1389,7 +1457,7 @@ function renderSettings(ep, importNote) {
       const body = JSON.parse(JSON.stringify(PROFILE));
       (body.catalog || []).forEach(it => { it.volume_discounts = parseDisc(it._disc); delete it._disc; });
       // /api/profile/save auto-fills missing EN/中文 fields with Qwen (legal terms excluded), then saves.
-      const res = await jfetch("/api/profile/save", { method: "POST", headers: { "X-QP-Write-Token": WRITE_TOKEN }, body: JSON.stringify(body) });
+      const res = await jfetch("/api/profile/save", { method: "POST", body: JSON.stringify(body) });
       clearDirty();
       const n = (res.filled || []).length;
       if (n > 0) {
@@ -1431,7 +1499,7 @@ function renderSettings(ep, importNote) {
       if (el) el.textContent = IMPORT_PHASES[phase];
     }, 5000);
     try {
-      const res = await jfetch("/api/profile/import", { method: "POST", headers: { "X-QP-Write-Token": WRITE_TOKEN }, body: JSON.stringify({ url }) });
+      const res = await jfetch("/api/profile/import", { method: "POST", body: JSON.stringify({ url }) });
       clearInterval(cyc);
       if (ep !== EPOCH) return;
       const d = res && res.draft;
@@ -1456,6 +1524,8 @@ function renderSettings(ep, importNote) {
 }
 
 /* ================= boot ================= */
+const _navLogout = document.getElementById("navLogout");
+if (_navLogout) _navLogout.addEventListener("click", e => { e.preventDefault(); logout(); });
 applyChrome();
 route();
 </script>

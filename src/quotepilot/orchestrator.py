@@ -34,6 +34,7 @@ def run_autopilot(
     runs_dir: Path | None = None,
     source_name: str = "stdin",
     progress: Optional[Callable[[str], None]] = None,
+    profile=None,
 ) -> RunResult:
     """progress, if given, is called with each stage name as it completes."""
     run_id = _new_run_id()
@@ -53,7 +54,7 @@ def run_autopilot(
         if progress:
             progress(stage)
 
-    quote, inquiry = core.assemble_quote_draft(raw_email, usage, on_stage)
+    quote, inquiry = core.assemble_quote_draft(raw_email, usage, on_stage, profile=profile)
 
     (run_dir / "inquiry.json").write_text(inquiry.model_dump_json(indent=2), encoding="utf-8")
     (run_dir / "quote.json").write_text(quote.model_dump_json(indent=2), encoding="utf-8")

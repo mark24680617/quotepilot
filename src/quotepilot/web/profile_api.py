@@ -15,7 +15,7 @@ from quotepilot.config import CODER_MODEL
 from quotepilot.llm import structured
 from quotepilot.models import CatalogItem
 from quotepilot.profile import CompanyProfile, load_profile, save_profile
-from quotepilot.web import guard
+from quotepilot.web import auth, guard
 
 logger = logging.getLogger("quotepilot.web")
 
@@ -127,18 +127,18 @@ class ImportRequest(BaseModel):
 
 
 @router.get("/api/profile")
-def get_profile():
-    profile = load_profile()
-    return profile.model_dump(mode="json")
+def get_profile(request: Request):
+    user = auth.current_user(request)
+    return load_profile(user).model_dump(mode="json")
 
 
 @router.put("/api/profile")
 def update_profile(profile: CompanyProfile, request: Request):
-    guard.require_write_token(request)
+    user = auth.current_user(request)
     guard.rate_limit(request, "profile_write")
     if len(profile.catalog) > guard.MAX_LINE_ITEMS:
         raise HTTPException(status_code=422, detail=f"Catalog too large (max {guard.MAX_LINE_ITEMS} items)")
-    path = save_profile(profile)
+    path = save_profile(profile, user)
     return {"ok": True, "saved_to": str(path)}
 
 
@@ -213,7 +213,7 @@ def save_profile_completed(profile: CompanyProfile, request: Request):
     This is the Settings 'Save' path: fill EN/中文 gaps a human left, so a
     one-language entry becomes a complete bilingual profile.
     """
-    guard.require_write_token(request)
+    user = auth.current_user(request)
     guard.rate_limit(request, "profile_write")
     if len(profile.catalog) > guard.MAX_LINE_ITEMS:
         raise HTTPException(status_code=422, detail=f"Catalog too large (max {guard.MAX_LINE_ITEMS} items)")
@@ -224,7 +224,7 @@ def save_profile_completed(profile: CompanyProfile, request: Request):
     except Exception as e:
         logger.warning("profile auto-complete failed: %s", e)
         completed, filled = profile, []  # translation failed -> save what the user entered
-    path = save_profile(completed)
+    path = save_profile(completed, user)
     return {
         "ok": True,
         "profile": completed.model_dump(mode="json"),
@@ -235,7 +235,7 @@ def save_profile_completed(profile: CompanyProfile, request: Request):
 
 @router.post("/api/profile/import")
 def import_profile(body: ImportRequest, request: Request):
-    guard.require_write_token(request)
+    user = auth.current_user(request)
     guard.rate_limit(request, "import")
     guard.daily_gate("import")  # website-import calls a paid model — cap it
 
@@ -281,8 +281,8 @@ def import_profile(body: ImportRequest, request: Request):
         logger.warning("import extraction failed: %s", e)
         raise HTTPException(status_code=502, detail="AI extraction failed")
 
-    # Step 4: Build response draft
-    current = load_profile()
+    # Step 4: Build response draft on top of the user's current profile
+    current = load_profile(user)
 
     # Update seller info from extraction, keeping current values where extraction is empty
     seller_info = current.seller.model_copy()

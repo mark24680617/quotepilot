@@ -11,6 +11,10 @@ mkdir -p ./.deploy_build
 cp -r src ./.deploy_build/
 cp -r templates ./.deploy_build/
 cp -r data ./.deploy_build/
+# never ship local runtime stores — user password hashes & per-user profiles
+# live only on the running instance's /tmp (see s.yaml env), never in the bundle
+rm -f ./.deploy_build/data/*.local.json
+rm -rf ./.deploy_build/data/profiles.local
 cp s.yaml ./.deploy_build/
 cp bootstrap ./.deploy_build/
 cp deploy/requirements.txt ./.deploy_build/
