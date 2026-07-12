@@ -51,6 +51,7 @@ resources:
             methods:
               - GET
               - POST
+              - PUT
               - HEAD
 
   # (Option A, currently disabled — the static GitHub Pages frontend is used
