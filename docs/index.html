@@ -1381,13 +1381,23 @@ function renderSettings(ep, importNote) {
   document.getElementById("saveBtn").addEventListener("click", async () => {
     const btn = document.getElementById("saveBtn");
     btn.disabled = true;
-    btn.innerHTML = '<span class="spin"></span>' + esc(L("Saving…", "保存中…"));
+    btn.innerHTML = '<span class="spin"></span>' + esc(L("Saving & auto-translating…", "保存中，AI 补齐翻译…"));
     try {
       const body = JSON.parse(JSON.stringify(PROFILE));
       (body.catalog || []).forEach(it => { it.volume_discounts = parseDisc(it._disc); delete it._disc; });
-      await jfetch("/api/profile", { method: "PUT", body: JSON.stringify(body) });
+      // /api/profile/save auto-fills missing EN/中文 fields with Qwen (legal terms excluded), then saves.
+      const res = await jfetch("/api/profile/save", { method: "POST", body: JSON.stringify(body) });
       clearDirty();
-      toast(L("Settings saved", "设置已保存"), "ok");
+      const n = (res.filled || []).length;
+      if (n > 0) {
+        // refresh the form to show the AI-filled translations
+        PROFILE = normProfile(res.profile);
+        viewSettings(ep);
+        toast(L(`Saved · AI filled ${n} missing translation${n > 1 ? "s" : ""} (legal terms not auto-translated)`,
+                `已保存 · AI 补齐了 ${n} 处缺失翻译（法律条款不自动翻译）`), "ok");
+      } else {
+        toast(L("Settings saved", "设置已保存"), "ok");
+      }
     } catch (e) {
       toast(L("Save failed: ", "保存失败：") + e.message, "bad");
     } finally {

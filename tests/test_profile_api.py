@@ -1,4 +1,5 @@
 from decimal import Decimal
+import json
 from unittest.mock import patch
 
 import pytest
@@ -96,3 +97,45 @@ def test_ssrf_guard_blocks_ipv6_mapped_and_shared():
     # 0.0.0.0 (unspecified) blocked; a public host allowed
     assert _ip_blocked("0.0.0.0") is True
     assert _ip_blocked("1.1.1.1") is False
+
+
+def test_autocomplete_fills_gaps_but_not_legal(monkeypatch):
+    from quotepilot.web import profile_api as pa
+    from quotepilot.profile import CompanyProfile, load_profile
+
+    base = load_profile().model_dump()
+    base["seller"]["name_zh"] = ""
+    base["catalog"][0]["name_zh"] = ""
+    base["terms"]["legal_zh"] = ""       # must NOT be auto-translated
+    prof = CompanyProfile.model_validate(base)
+
+    class _I:
+        def __init__(self, i, t): self.index, self.text = i, t
+
+    class _T:
+        def __init__(self, items): self.items = items
+
+    def fake(**kw):
+        payload = json.loads(kw["user"].split("target_language:\n", 1)[1])
+        return _T([_I(p["index"], "ZH:" + p["text"][:6]) for p in payload])
+
+    monkeypatch.setattr(pa, "structured", fake)
+    monkeypatch.setattr(pa.guard, "daily_gate", lambda *a, **k: None)
+    completed, filled = pa._complete_profile(prof)
+
+    assert completed.seller.name_zh.startswith("ZH:")
+    assert completed.catalog[0].name_zh.startswith("ZH:")
+    assert completed.terms.legal_zh == ""      # legal untouched
+    assert "legal_zh" not in filled
+
+
+def test_autocomplete_noop_when_complete(monkeypatch):
+    from quotepilot.web import profile_api as pa
+    from quotepilot.profile import load_profile
+
+    called = {"n": 0}
+    monkeypatch.setattr(pa, "structured", lambda **k: (_ for _ in ()).throw(AssertionError("should not call model")))
+    monkeypatch.setattr(pa.guard, "daily_gate", lambda *a, **k: called.__setitem__("n", called["n"] + 1))
+    completed, filled = pa._complete_profile(load_profile())  # bundled profile is fully bilingual
+    assert filled == []
+    assert called["n"] == 0  # no model call, no daily-gate charge

@@ -1,4 +1,5 @@
 import ipaddress
+import json
 import logging
 import re
 import socket
@@ -138,6 +139,96 @@ def update_profile(profile: CompanyProfile, request: Request):
         raise HTTPException(status_code=422, detail=f"Catalog too large (max {guard.MAX_LINE_ITEMS} items)")
     path = save_profile(profile)
     return {"ok": True, "saved_to": str(path)}
+
+
+class _Translation(BaseModel):
+    index: int
+    text: str
+
+
+class _Translations(BaseModel):
+    items: List[_Translation]
+
+
+# Bilingual field pairs to auto-complete. Legal terms (legal_en/legal_zh) are
+# DELIBERATELY excluded — legal clauses are never AI-written/translated.
+def _complete_profile(profile: CompanyProfile) -> tuple[CompanyProfile, list[str]]:
+    from quotepilot.config import PLANNER_MODEL
+
+    data = profile.model_dump()
+    slots: list[tuple[str, str, object, str]] = []  # (source_text, target_label, container, key_to_set)
+
+    def pair(container: dict, en_key: str, zh_key: str) -> None:
+        en = (container.get(en_key) or "").strip()
+        zh = (container.get(zh_key) or "").strip()
+        if en and not zh:
+            slots.append((en, "Simplified Chinese", container, zh_key))
+        elif zh and not en:
+            slots.append((zh, "English", container, en_key))
+
+    s = data["seller"]
+    pair(s, "name_en", "name_zh")
+    pair(s, "jurisdiction_en", "jurisdiction_zh")
+    tm = data["terms"]
+    pair(tm, "payment_en", "payment_zh")
+    pair(tm, "tax_note_en", "tax_note_zh")  # legal_en/legal_zh intentionally NOT translated
+    for item in data["catalog"]:
+        pair(item, "name_en", "name_zh")
+        pair(item, "description_en", "description_zh")
+        pair(item, "unit", "unit_zh")
+
+    if not slots:
+        return profile, []
+
+    guard.daily_gate("import")  # this calls a paid model — count against the daily cap
+    payload = [{"index": i, "target_language": tgt, "text": txt} for i, (txt, tgt, _, _) in enumerate(slots)]
+    result: _Translations = structured(
+        model=PLANNER_MODEL,
+        system=(
+            "You translate short business fields (company identity, payment/tax notes, "
+            "product names, descriptions, units) between English and Simplified Chinese. "
+            "For each item, translate its text into the given target_language, producing "
+            "natural business wording (商务风格, not literal). Return one translation per "
+            "index. Output translations only — no notes, no quotes."
+        ),
+        user="Translate each item to its target_language:\n" + json.dumps(payload, ensure_ascii=False),
+        schema=_Translations,
+        max_tokens=2000,
+    )
+    by_index = {t.index: (t.text or "").strip() for t in result.items}
+    filled: list[str] = []
+    for i, (_txt, _tgt, container, key) in enumerate(slots):
+        tr = by_index.get(i)
+        if tr:
+            container[key] = tr
+            filled.append(key)
+    return CompanyProfile.model_validate(data), filled
+
+
+@router.post("/api/profile/save")
+def save_profile_completed(profile: CompanyProfile, request: Request):
+    """Auto-fill missing-language fields (except legal terms) with Qwen, then save.
+
+    This is the Settings 'Save' path: fill EN/中文 gaps a human left, so a
+    one-language entry becomes a complete bilingual profile.
+    """
+    guard.rate_limit(request, "profile_write")
+    if len(profile.catalog) > guard.MAX_LINE_ITEMS:
+        raise HTTPException(status_code=422, detail=f"Catalog too large (max {guard.MAX_LINE_ITEMS} items)")
+    try:
+        completed, filled = _complete_profile(profile)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning("profile auto-complete failed: %s", e)
+        completed, filled = profile, []  # translation failed -> save what the user entered
+    path = save_profile(completed)
+    return {
+        "ok": True,
+        "profile": completed.model_dump(mode="json"),
+        "filled": filled,
+        "saved_to": str(path),
+    }
 
 
 @router.post("/api/profile/import")
