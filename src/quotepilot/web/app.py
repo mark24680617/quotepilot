@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import logging
+import os
 import re
+import secrets
 import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -12,13 +15,27 @@ from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from quotepilot.config import DATA_DIR, RUNS_DIR
 from quotepilot.hitl import summarize
 from quotepilot.models import Decision, QuoteDraft, RunResult
 from quotepilot.orchestrator import run_autopilot
 from quotepilot.stages.render import render_quote_html
+from quotepilot.web import guard
+
+logger = logging.getLogger("quotepilot.web")
+
+# Origins allowed to call this API from a browser (defense-in-depth; a curl
+# attacker ignores CORS, which is why the rate-limit/daily-cap above matter).
+ALLOWED_ORIGINS = [
+    o.strip()
+    for o in os.getenv(
+        "QP_ALLOWED_ORIGINS",
+        "https://mark24680617.github.io,http://localhost:8123,http://127.0.0.1:8123",
+    ).split(",")
+    if o.strip()
+]
 
 
 class WebGate:
@@ -71,12 +88,35 @@ class Submission:
     status: str
     stages: list[str]
     gate: WebGate
+    owner_token: str = ""  # required to edit/approve/reject this run (never listed)
     result: RunResult | None = None
     error: str | None = None
 
 
 SUBMISSIONS: dict[str, Submission] = {}
 SUBMISSIONS_LOCK = threading.Lock()
+# Bounded worker pool: cap concurrent pipelines so a burst can't launch
+# unbounded qwen-max calls or exhaust threads.
+_INFLIGHT = threading.BoundedSemaphore(guard.MAX_INFLIGHT)
+
+
+def _require_owner(request: Request, sub: Submission) -> None:
+    token = request.headers.get("x-qp-owner-token", "")
+    if not sub.owner_token or token != sub.owner_token:
+        raise HTTPException(
+            status_code=403,
+            detail="You can only edit or decide runs you started (owner token missing/mismatch).",
+        )
+
+
+def _evict_old_submissions() -> None:
+    """Keep the in-memory map bounded (called under SUBMISSIONS_LOCK)."""
+    if len(SUBMISSIONS) <= guard.MAX_SUBMISSIONS:
+        return
+    for sid in sorted(SUBMISSIONS, key=lambda s: SUBMISSIONS[s].created_at)[
+        : len(SUBMISSIONS) - guard.MAX_SUBMISSIONS
+    ]:
+        SUBMISSIONS.pop(sid, None)
 
 
 def sub_view(sub: Submission) -> dict[str, Any]:
@@ -187,57 +227,55 @@ def _gather_dashboard_data():
     }
 
 
-def _start_submission(email_text: str) -> str:
-    """Start a new submission - shared between web form and API"""
+def _start_submission(email_text: str) -> tuple[str, str]:
+    """Start a new submission. Returns (sid, owner_token).
+
+    The daily global cap is checked BEFORE any model call; if a worker slot
+    isn't free we refuse rather than pile up threads.
+    """
+    guard.daily_gate("submit")  # 429 if the demo's daily model budget is spent
+    if not _INFLIGHT.acquire(blocking=False):
+        raise HTTPException(status_code=429, detail="Server busy — too many runs in flight. Try again shortly.")
+
     sid = uuid4().hex[:12]
+    owner_token = secrets.token_urlsafe(12)
     gate = WebGate(on_review=lambda: update_submission_status(sid, "awaiting_approval"))
-    
+
     submission = Submission(
-        sid=sid,
-        source="web",
-        created_at=datetime.now(timezone.utc),
-        status="running",
-        stages=[],
-        gate=gate
+        sid=sid, source="web", created_at=datetime.now(timezone.utc),
+        status="running", stages=[], gate=gate, owner_token=owner_token,
     )
-    
     with SUBMISSIONS_LOCK:
         SUBMISSIONS[sid] = submission
-    
-    # Start processing in a background thread
+        _evict_old_submissions()
+
     def process_submission():
         try:
             def progress_callback(stage: str):
                 with SUBMISSIONS_LOCK:
                     if sid in SUBMISSIONS:
                         SUBMISSIONS[sid].stages.append(stage)
-            
+
             result = run_autopilot(
-                raw_email=email_text,
-                gate=gate,
-                runs_dir=RUNS_DIR,
-                source_name=f"web_{sid}",
-                progress=progress_callback
+                raw_email=email_text, gate=gate, runs_dir=RUNS_DIR,
+                source_name=f"web_{sid}", progress=progress_callback,
             )
-            
             with SUBMISSIONS_LOCK:
                 if sid in SUBMISSIONS:
                     submission = SUBMISSIONS[sid]
                     submission.result = result
-                    if result.decision.action == "approve":
-                        submission.status = "approved"
-                    else:
-                        submission.status = "rejected"
+                    submission.status = "approved" if result.decision.action == "approve" else "rejected"
         except Exception as e:
+            logger.exception("submission %s failed", sid)
             with SUBMISSIONS_LOCK:
                 if sid in SUBMISSIONS:
                     SUBMISSIONS[sid].status = "failed"
-                    SUBMISSIONS[sid].error = str(e)
-    
-    thread = threading.Thread(target=process_submission, daemon=True)
-    thread.start()
-    
-    return sid
+                    SUBMISSIONS[sid].error = "Pipeline error"  # generic; details in server log
+        finally:
+            _INFLIGHT.release()
+
+    threading.Thread(target=process_submission, daemon=True).start()
+    return sid, owner_token
 
 
 def _goto(url: str) -> HTMLResponse:
@@ -251,10 +289,20 @@ app = FastAPI(title="QuotePilot")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],   # anonymous public demo API — no cookies/credentials
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=False,       # anonymous, no cookies — never reflect+credentials
+    allow_methods=["GET", "POST", "PUT"],
+    allow_headers=["Content-Type", "X-QP-Owner-Token"],
 )
+
+
+@app.middleware("http")
+async def _security_headers(request: Request, call_next):
+    response = await call_next(request)
+    for k, v in guard.SECURITY_HEADERS.items():
+        response.headers.setdefault(k, v)
+    return response
+
 
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
@@ -287,17 +335,17 @@ async def api_bootstrap():
 
 
 class SubmitRequest(BaseModel):
-    email_text: str
+    email_text: str = Field(min_length=20, max_length=guard.MAX_EMAIL_CHARS)
 
 
 @app.post("/api/submit")
-async def api_submit(request: SubmitRequest):
-    email_text = request.email_text.strip()
+async def api_submit(request: Request, body: SubmitRequest):
+    guard.rate_limit(request, "submit")
+    email_text = body.email_text.strip()
     if len(email_text) < 20:
         raise HTTPException(status_code=422, detail="Email text too short")
-    
-    sid = _start_submission(email_text)
-    return {"sid": sid}
+    sid, token = _start_submission(email_text)
+    return {"sid": sid, "token": token}
 
 
 @app.get("/api/s/{sid}")
@@ -327,7 +375,7 @@ class EditRequest(BaseModel):
 
 
 @app.post("/api/s/{sid}/edit")
-async def api_edit_quote(sid: str, request: EditRequest):
+async def api_edit_quote(sid: str, request: Request, body: EditRequest):
     """Re-price the quote from human line-item edits (Decimal math, server-side)."""
     from quotepilot import core
 
@@ -335,15 +383,20 @@ async def api_edit_quote(sid: str, request: EditRequest):
         submission = SUBMISSIONS.get(sid)
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
+    _require_owner(request, submission)
     gate = submission.gate
     if submission.status != "awaiting_approval" or gate.quote is None:
         raise HTTPException(status_code=409, detail="Quote is not open for editing")
 
-    edits = {k: v for k, v in request.model_dump().items() if v is not None}
+    edits = {k: v for k, v in body.model_dump().items() if v is not None}
+    lines = edits.get("lines")
+    if isinstance(lines, list) and len(lines) > guard.MAX_LINE_ITEMS:
+        raise HTTPException(status_code=422, detail=f"Too many line items (max {guard.MAX_LINE_ITEMS})")
     try:
         new_quote = core.reprice_quote(gate.quote, edits)
     except Exception as e:
-        raise HTTPException(status_code=422, detail=f"Could not reprice: {e}")
+        logger.warning("reprice failed for %s: %s", sid, e)
+        raise HTTPException(status_code=422, detail="Could not reprice quote")
 
     gate.quote = new_quote  # the approval + preview now use the edited quote
     return {"ok": True, "s": sub_view(submission), "summary": summarize(new_quote)}
@@ -355,23 +408,24 @@ class DecisionRequest(BaseModel):
 
 
 @app.post("/api/s/{sid}/decision")
-async def api_make_decision(sid: str, request: DecisionRequest):
+async def api_make_decision(sid: str, request: Request, body: DecisionRequest):
     with SUBMISSIONS_LOCK:
         submission = SUBMISSIONS.get(sid)
-    
+
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
-    
-    if request.action not in ("approve", "reject"):
+    _require_owner(request, submission)
+
+    if body.action not in ("approve", "reject"):
         raise HTTPException(status_code=400, detail="Invalid action")
-    
+
     # Check for blocking risk flags if approving
-    if request.action == "approve" and submission.gate.quote:
+    if body.action == "approve" and submission.gate.quote:
         for flag in submission.gate.quote.risk_flags:
             if flag.severity == "block":
                 raise HTTPException(status_code=409, detail="Cannot approve due to blocking risk flags")
     
-    success = submission.gate.resolve(request.action, request.notes)
+    success = submission.gate.resolve(body.action, body.notes)
     if not success:
         raise HTTPException(status_code=409, detail="Decision could not be processed")
     
@@ -401,12 +455,12 @@ async def get_sample(name: str):
 
 
 @app.post("/submit")
-async def submit_email(email_text: str = Form(..., min_length=20)):
+async def submit_email(request: Request, email_text: str = Form(..., min_length=20, max_length=guard.MAX_EMAIL_CHARS)):
+    guard.rate_limit(request, "submit")
     email_text = email_text.strip()
     if len(email_text) < 20:
         raise HTTPException(status_code=422, detail="Email text too short")
-    
-    sid = _start_submission(email_text)
+    sid, _token = _start_submission(email_text)
     return _goto(f"/s/{sid}")
 
 
@@ -466,13 +520,14 @@ async def get_preview(sid: str):
 
 
 @app.post("/s/{sid}/decision")
-async def make_decision(sid: str, action: str = Form(...), notes: str | None = Form(None)):
+async def make_decision(request: Request, sid: str, action: str = Form(...), notes: str | None = Form(None)):
     with SUBMISSIONS_LOCK:
         submission = SUBMISSIONS.get(sid)
-    
+
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
-    
+    _require_owner(request, submission)
+
     if action not in ("approve", "reject"):
         raise HTTPException(status_code=400, detail="Invalid action")
     
@@ -503,9 +558,13 @@ async def get_artifact(run_id: str, filename: str):
     if Path(filename).suffix.lower() not in allowed_extensions:
         raise HTTPException(status_code=404, detail="Invalid file type")
     
-    artifact_path = RUNS_DIR / run_id / filename
-    if not artifact_path.exists():
+    runs_root = RUNS_DIR.resolve()
+    artifact_path = (runs_root / run_id / filename).resolve()
+    # Containment guard (defense-in-depth on top of the regex validation).
+    if runs_root not in artifact_path.parents or not artifact_path.is_file():
         raise HTTPException(status_code=404, detail="Artifact not found")
-    
+
     from fastapi.responses import FileResponse
-    return FileResponse(artifact_path)
+    # Serve untrusted artifact bytes as an attachment so a browser never
+    # renders/executes them inline at this origin.
+    return FileResponse(artifact_path, headers={"Content-Disposition": "attachment"})

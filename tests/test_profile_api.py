@@ -84,3 +84,15 @@ def test_ssrf_guard_blocks_internal_hosts():
     assert _blocked_host("localhost") is True
     assert _blocked_host("127.0.0.1") is True
     assert _blocked_host("LOCALHOST.") is True
+
+
+def test_ssrf_guard_blocks_ipv6_mapped_and_shared():
+    from quotepilot.web.profile_api import _ip_blocked
+
+    # IPv4-mapped IPv6 to the AWS/ECS metadata IP must be blocked
+    assert _ip_blocked("::ffff:169.254.169.254") is True
+    # Alibaba metadata (100.64/10 shared address space)
+    assert _ip_blocked("100.100.100.200") is True
+    # 0.0.0.0 (unspecified) blocked; a public host allowed
+    assert _ip_blocked("0.0.0.0") is True
+    assert _ip_blocked("1.1.1.1") is False

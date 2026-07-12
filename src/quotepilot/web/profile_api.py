@@ -1,4 +1,5 @@
 import ipaddress
+import logging
 import re
 import socket
 from decimal import Decimal, InvalidOperation
@@ -6,26 +7,42 @@ from typing import List, Optional
 from urllib.parse import urlparse
 
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, field_validator
 
 from quotepilot.config import CODER_MODEL
 from quotepilot.llm import structured
 from quotepilot.models import CatalogItem
 from quotepilot.profile import CompanyProfile, load_profile, save_profile
+from quotepilot.web import guard
 
+logger = logging.getLogger("quotepilot.web")
 
 _METADATA_IPS = {"169.254.169.254", "100.100.100.200"}
 
 
 def _ip_blocked(ip_str: str) -> bool:
-    if ip_str in _METADATA_IPS:
-        return True
     try:
         ip = ipaddress.ip_address(ip_str)
     except ValueError:
         return True
-    return ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved
+    # IPv4-mapped IPv6 (e.g. ::ffff:169.254.169.254) must be checked as its v4.
+    mapped = getattr(ip, "ipv4_mapped", None)
+    if mapped is not None:
+        ip = mapped
+    if str(ip) in _METADATA_IPS:
+        return True
+    # Only allow globally-routable unicast — this rejects private, loopback,
+    # link-local (incl. cloud metadata 169.254/100.100.100.200), reserved,
+    # multicast, and unspecified addresses in one check.
+    return (
+        not ip.is_global
+        or ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_reserved
+        or ip.is_multicast
+    )
 
 
 def _blocked_host(hostname: str) -> bool:
@@ -115,22 +132,29 @@ def get_profile():
 
 
 @router.put("/api/profile")
-def update_profile(profile: CompanyProfile):
+def update_profile(profile: CompanyProfile, request: Request):
+    guard.rate_limit(request, "profile_write")
+    if len(profile.catalog) > guard.MAX_LINE_ITEMS:
+        raise HTTPException(status_code=422, detail=f"Catalog too large (max {guard.MAX_LINE_ITEMS} items)")
     path = save_profile(profile)
     return {"ok": True, "saved_to": str(path)}
 
 
 @router.post("/api/profile/import")
-def import_profile(request: ImportRequest):
+def import_profile(body: ImportRequest, request: Request):
+    guard.rate_limit(request, "import")
+    guard.daily_gate("import")  # website-import calls a paid model — cap it
+
     # Step 1: Validate URL and fetch content
-    parsed = urlparse(request.url)
+    parsed = urlparse(body.url)
     if parsed.scheme not in ("http", "https"):
         raise HTTPException(status_code=422, detail="URL must use http or https scheme")
 
     try:
-        response = _fetch_guarded(request.url)
+        response = _fetch_guarded(body.url)
     except httpx.HTTPError as e:
-        raise HTTPException(status_code=502, detail=f"Failed to fetch URL: {str(e)}")
+        logger.warning("import fetch failed for %s: %s", parsed.hostname, e)
+        raise HTTPException(status_code=502, detail="Failed to fetch URL")
 
     # Truncate body to 400_000 chars
     content = response.text[:400_000]
@@ -160,7 +184,8 @@ def import_profile(request: ImportRequest):
             max_tokens=3000,
         )
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"AI extraction failed: {e}")
+        logger.warning("import extraction failed: %s", e)
+        raise HTTPException(status_code=502, detail="AI extraction failed")
 
     # Step 4: Build response draft
     current = load_profile()

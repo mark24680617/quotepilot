@@ -372,8 +372,13 @@ function applyChrome() {
   $("#footBrand").textContent = L("QuotePilot · Agent powered by Qwen", "QuotePilot · 智能体由通义千问驱动");
 }
 
+// Owner tokens bind edit/approve/reject to the tab that started the run.
+function saveTok(sid, tok) { try { sessionStorage.setItem("qp_tok_" + sid, tok || ""); } catch (e) {} }
+function getTok(sid) { try { return sessionStorage.getItem("qp_tok_" + sid) || ""; } catch (e) { return ""; } }
+
 async function jfetch(path, opts) {
-  const o = Object.assign({ headers: { "Content-Type": "application/json" } }, opts || {});
+  opts = opts || {};
+  const o = Object.assign({}, opts, { headers: Object.assign({ "Content-Type": "application/json" }, opts.headers || {}) });
   const r = await fetch(API + path, o);
   const txt = await r.text();
   let body = null;
@@ -590,6 +595,7 @@ function renderDash(ep) {
     btn.innerHTML = '<span class="spin"></span>' + esc(L("Handing off…", "正在移交智能体…"));
     try {
       const r = await jfetch("/api/submit", { method: "POST", body: JSON.stringify({ email_text: txt }) });
+      saveTok(r.sid, r.token);
       location.hash = "#/s/" + encodeURIComponent(r.sid);
     } catch (e) {
       btn.disabled = false;
@@ -633,20 +639,18 @@ async function openArchivedQuote(item, btn) {
   if (!item) return;
   if (btn) btn.classList.add("loading");
   try {
-    let blob = null;
+    let html = null;
     const art = (item.artifacts || []).find(x => /\.html?$/i.test(x.filename || "")) || (item.artifacts || []).find(x => /quote|html/i.test(x.kind || ""));
     if (art) {
       const r = await fetch(`${API}/artifacts/${encodeURIComponent(art.run_id)}/${encodeURIComponent(art.filename)}`);
       if (!r.ok) throw new Error("HTTP " + r.status);
-      blob = new Blob([await r.blob()], { type: "text/html" });
+      html = await r.text();
     } else if (item.sid) {
       const r = await fetch(`${API}/s/${encodeURIComponent(item.sid)}/preview`);
       if (!r.ok) throw new Error("HTTP " + r.status);
-      blob = new Blob([await r.text()], { type: "text/html" });
+      html = await r.text();
     } else throw new Error("no artifact");
-    const u = URL.createObjectURL(blob);
-    window.open(u, "_blank");
-    setTimeout(() => URL.revokeObjectURL(u), 60000);
+    viewHtmlSandboxed(html, item.quote_number || "Quote");  // sandboxed, no script exec
   } catch (e) { toast(L("Quote failed: ", "报价单加载失败：") + e.message, "bad"); }
   finally { if (btn) btn.classList.remove("loading"); }
 }
@@ -851,6 +855,7 @@ function loadPreview(sid, ep) {
 function renderAwaiting(sid, s, summary, ep) {
   const flags = s.risk_flags || [];
   const blocked = flags.some(f => f.severity === "block");
+  const owned = !!getTok(sid);  // only the tab that started this run can act
   app.innerHTML = `<div class="view">${runHeader(sid, s)}
     <section class="gate">
       <div class="gate-band">
@@ -882,18 +887,20 @@ function renderAwaiting(sid, s, summary, ep) {
         </section>
         <section class="card card-pad" style="margin-top:18px">
           <h2>${esc(L("Your decision", "您的决定"))}</h2>
+          ${owned ? `
           <textarea class="notes-box" id="notes" style="margin-top:12px" placeholder="${esc(L("Approval notes (optional, recorded on file)…", "审批备注（可选，会记录在案）…"))}"></textarea>
           <div class="decide">
             <button class="btn btn-ok" id="approveBtn" ${blocked ? "disabled" : ""}>${esc(L("Approve & issue", "批准并出具报价"))}</button>
             <button class="btn btn-danger" id="rejectBtn">${esc(L("Reject", "驳回"))}</button>
           </div>
           ${blocked ? `<p class="block-note">${esc(L("Approval is locked by a block-severity flag. Resolve it, or reject and handle offline.", "存在「阻断」级风险标记，批准已锁定。请先解决相关问题，或驳回后线下处理。"))}</p>` : ""}
+          ` : `<p class="block-note" style="margin-top:12px">${esc(L("View only — approve, edit and reject are limited to the tab that started this run.", "仅查看——批准、编辑、驳回仅限发起该运行的浏览器标签页。"))}</p>`}
         </section>
       </div>
       <section class="card card-pad">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
           <h2>${esc(L("Quote preview", "报价单预览"))}</h2>
-          <button class="btn btn-ghost btn-sm" id="editToggle">✎ ${esc(L("Edit quote", "编辑报价"))}</button>
+          ${owned ? `<button class="btn btn-ghost btn-sm" id="editToggle">✎ ${esc(L("Edit quote", "编辑报价"))}</button>` : ""}
         </div>
         <div class="preview-frame" id="previewHolder" style="margin-top:12px"><div class="preview-load">${esc(L("Rendering preview…", "正在生成预览…"))}</div></div>
         <div id="editorHolder" hidden style="margin-top:12px"></div>
@@ -910,7 +917,7 @@ function renderAwaiting(sid, s, summary, ep) {
     const orig = btn.textContent;
     btn.innerHTML = '<span class="spin"></span>' + esc(action === "approve" ? L("Issuing…", "出具中…") : L("Rejecting…", "驳回中…"));
     try {
-      await jfetch(`/api/s/${encodeURIComponent(sid)}/decision`, { method: "POST", body: JSON.stringify({ action, notes: (document.getElementById("notes") || {}).value || "" }) });
+      await jfetch(`/api/s/${encodeURIComponent(sid)}/decision`, { method: "POST", headers: { "X-QP-Owner-Token": getTok(sid) }, body: JSON.stringify({ action, notes: (document.getElementById("notes") || {}).value || "" }) });
       toast(action === "approve" ? L("Approved — issuing the quote", "已批准，正在出具报价单") : L("Rejected", "已驳回"), action === "approve" ? "ok" : undefined);
       viewRun(sid, ep);
     } catch (e) {
@@ -923,7 +930,8 @@ function renderAwaiting(sid, s, summary, ep) {
   }
   const ab = document.getElementById("approveBtn");
   if (ab) ab.addEventListener("click", () => decide("approve"));
-  document.getElementById("rejectBtn").addEventListener("click", () => decide("reject"));
+  const rb = document.getElementById("rejectBtn");
+  if (rb) rb.addEventListener("click", () => decide("reject"));
 
   // ---- editable quote ----
   let editing = false;
@@ -1050,7 +1058,7 @@ async function recalcQuote(sid, ep) {
   const orig = btn.textContent;
   btn.disabled = true; btn.innerHTML = '<span class="spin"></span>' + esc(L("Recalculating…", "重新计算中…"));
   try {
-    const res = await jfetch(`/api/s/${encodeURIComponent(sid)}/edit`, { method: "POST", body: JSON.stringify(collectEdits()) });
+    const res = await jfetch(`/api/s/${encodeURIComponent(sid)}/edit`, { method: "POST", headers: { "X-QP-Owner-Token": getTok(sid) }, body: JSON.stringify(collectEdits()) });
     if (ep !== EPOCH) return;
     const s2 = res.s || {};
     const u = document.getElementById("stTotalUsd"); if (u) u.textContent = fmtUSD(s2.total_usd);
@@ -1075,20 +1083,43 @@ function artifactsHTML(s) {
   if (!arts.length) return `<span class="faint" style="font-size:12.5px">${esc(L("No artifacts", "暂无产物"))}</span>`;
   return arts.map((a, i) => `<button class="art-chip" data-art="${i}"><span class="kind">${esc(a.kind || "file")}</span>${esc(a.filename || "artifact")}</button>`).join("");
 }
+// View untrusted HTML in a fully-sandboxed iframe (no scripts, unique origin)
+// inside a modal — never window.open a same-origin blob of server HTML.
+function viewHtmlSandboxed(htmlText, title) {
+  const back = document.createElement("div");
+  back.style.cssText = "position:fixed;inset:0;z-index:200;background:rgba(15,30,48,.55);display:flex;flex-direction:column;padding:24px";
+  const bar = document.createElement("div");
+  bar.style.cssText = "display:flex;justify-content:space-between;align-items:center;color:#fff;max-width:900px;width:100%;margin:0 auto 10px;font-size:13px";
+  const t = document.createElement("span"); t.textContent = title || "Quote"; bar.appendChild(t);
+  const x = document.createElement("button"); x.textContent = "✕ " + L("Close", "关闭");
+  x.className = "btn btn-ghost btn-sm"; bar.appendChild(x);
+  const frame = document.createElement("iframe");
+  frame.setAttribute("sandbox", "");                 // no scripts, no same-origin
+  frame.setAttribute("title", title || "Quote");
+  frame.srcdoc = String(htmlText);
+  frame.style.cssText = "flex:1;width:100%;max-width:900px;margin:0 auto;border:none;border-radius:10px;background:#fff";
+  back.appendChild(bar); back.appendChild(frame);
+  const close = () => back.remove();
+  x.addEventListener("click", close);
+  back.addEventListener("click", e => { if (e.target === back) close(); });
+  document.body.appendChild(back);
+}
+
 async function openArtifact(a, btn) {
   if (!a) return;
   if (btn) btn.classList.add("loading");
   try {
     const r = await fetch(`${API}/artifacts/${encodeURIComponent(a.run_id)}/${encodeURIComponent(a.filename)}`);
     if (!r.ok) throw new Error("HTTP " + r.status);
-    let blob = await r.blob();
     const fn = a.filename || "artifact";
-    if (/\.html?$/i.test(fn)) blob = new Blob([blob], { type: "text/html" });
-    else if (/\.(txt|md|eml)$/i.test(fn)) blob = new Blob([blob], { type: "text/plain;charset=utf-8" });
-    const u = URL.createObjectURL(blob);
-    if (/\.(html?|pdf|txt|md|eml|png|jpe?g)$/i.test(fn)) window.open(u, "_blank");
-    else { const l = document.createElement("a"); l.href = u; l.download = fn; document.body.appendChild(l); l.click(); l.remove(); }
-    setTimeout(() => URL.revokeObjectURL(u), 60000);
+    if (/\.html?$/i.test(fn)) {                        // render safely, never execute
+      viewHtmlSandboxed(await r.text(), fn);
+    } else {                                           // everything else: download
+      const u = URL.createObjectURL(await r.blob());
+      const l = document.createElement("a"); l.href = u; l.download = fn;
+      document.body.appendChild(l); l.click(); l.remove();
+      setTimeout(() => URL.revokeObjectURL(u), 60000);
+    }
   } catch (e) { toast(L("Artifact failed: ", "产物加载失败：") + e.message, "bad"); }
   finally { if (btn) btn.classList.remove("loading"); }
 }

@@ -107,6 +107,69 @@ def test_api_unknown_submission():
     assert resp.status_code == 404
 
 
-def test_cors():
-    resp = client.get("/", headers={"Origin": "https://example.github.io"})
-    assert resp.headers.get("access-control-allow-origin") == "*"
+def test_cors_allows_pages_origin_only():
+    ok = client.get("/", headers={"Origin": "https://mark24680617.github.io"})
+    assert ok.headers.get("access-control-allow-origin") == "https://mark24680617.github.io"
+    # a random origin is NOT reflected
+    bad = client.get("/", headers={"Origin": "https://evil.example"})
+    assert bad.headers.get("access-control-allow-origin") not in ("*", "https://evil.example")
+    # never combine with credentials
+    assert ok.headers.get("access-control-allow-credentials") != "true"
+
+
+def test_security_headers_present():
+    r = client.get("/api/bootstrap")
+    assert r.headers.get("x-content-type-options") == "nosniff"
+    assert r.headers.get("x-frame-options") == "DENY"
+    assert "frame-ancestors 'none'" in r.headers.get("content-security-policy", "")
+
+
+def test_submit_rejects_oversize_and_short():
+    assert client.post("/api/submit", json={"email_text": "hi"}).status_code == 422
+    huge = "A" * 25_000
+    assert client.post("/api/submit", json={"email_text": huge}).status_code == 422
+
+
+def test_owner_token_enforced_on_mutations():
+    from datetime import datetime, timezone
+    from quotepilot.web import app as appmod
+
+    gate = WebGate(on_review=lambda: None)
+    gate.quote = make_quote()
+    sub = appmod.Submission(
+        sid="unit-sid", source="test", created_at=datetime.now(timezone.utc),
+        status="awaiting_approval", stages=[], gate=gate, owner_token="secret-tok",
+    )
+    with appmod.SUBMISSIONS_LOCK:
+        appmod.SUBMISSIONS["unit-sid"] = sub
+    try:
+        # no token -> 403
+        assert client.post("/api/s/unit-sid/decision", json={"action": "reject"}).status_code == 403
+        # wrong token -> 403
+        assert client.post("/api/s/unit-sid/decision", json={"action": "reject"},
+                           headers={"X-QP-Owner-Token": "nope"}).status_code == 403
+        # correct token -> processed (reject succeeds)
+        ok = client.post("/api/s/unit-sid/decision", json={"action": "reject"},
+                         headers={"X-QP-Owner-Token": "secret-tok"})
+        assert ok.status_code == 200
+    finally:
+        with appmod.SUBMISSIONS_LOCK:
+            appmod.SUBMISSIONS.pop("unit-sid", None)
+
+
+def test_rate_limit_and_daily_gate():
+    from quotepilot.web import guard
+
+    class _Req:
+        def __init__(self, ip):
+            self.headers = {"x-forwarded-for": ip}
+            self.client = None
+
+    guard._ip_hits.clear()
+    r = _Req("203.0.113.9")
+    maxn = guard.LIMITS["submit"][0]
+    for _ in range(maxn):
+        guard.rate_limit(r, "submit")  # should not raise
+    import pytest
+    with pytest.raises(Exception):
+        guard.rate_limit(r, "submit")  # over the limit -> 429
