@@ -134,6 +134,7 @@ def get_profile():
 
 @router.put("/api/profile")
 def update_profile(profile: CompanyProfile, request: Request):
+    guard.require_write_token(request)
     guard.rate_limit(request, "profile_write")
     if len(profile.catalog) > guard.MAX_LINE_ITEMS:
         raise HTTPException(status_code=422, detail=f"Catalog too large (max {guard.MAX_LINE_ITEMS} items)")
@@ -212,6 +213,7 @@ def save_profile_completed(profile: CompanyProfile, request: Request):
     This is the Settings 'Save' path: fill EN/中文 gaps a human left, so a
     one-language entry becomes a complete bilingual profile.
     """
+    guard.require_write_token(request)
     guard.rate_limit(request, "profile_write")
     if len(profile.catalog) > guard.MAX_LINE_ITEMS:
         raise HTTPException(status_code=422, detail=f"Catalog too large (max {guard.MAX_LINE_ITEMS} items)")
@@ -233,6 +235,7 @@ def save_profile_completed(profile: CompanyProfile, request: Request):
 
 @router.post("/api/profile/import")
 def import_profile(body: ImportRequest, request: Request):
+    guard.require_write_token(request)
     guard.rate_limit(request, "import")
     guard.daily_gate("import")  # website-import calls a paid model — cap it
 

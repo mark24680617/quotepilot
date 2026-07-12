@@ -44,9 +44,11 @@ def test_put_roundtrip(monkeypatch, tmp_path):
     
     # Modify the name
     current_data["seller"]["name_en"] = "Acme Ltd"
-    
-    # PUT the modified profile
-    response = client.put("/api/profile", json=current_data)
+
+    from quotepilot.web.guard import WRITE_TOKEN
+    hdr = {"X-QP-Write-Token": WRITE_TOKEN}
+    # PUT the modified profile (write token required)
+    response = client.put("/api/profile", json=current_data, headers=hdr)
     assert response.status_code == 200
     result = response.json()
     assert result["ok"] is True
@@ -61,17 +63,31 @@ def test_put_roundtrip(monkeypatch, tmp_path):
 
 def test_put_invalid():
     client = TestClient(app)
-    
-    # Try to PUT with invalid data
-    response = client.put("/api/profile", json={"seller": {}})
+    from quotepilot.web.guard import WRITE_TOKEN
+
+    # Invalid data with a valid token -> 422
+    response = client.put("/api/profile", json={"seller": {}}, headers={"X-QP-Write-Token": WRITE_TOKEN})
     assert response.status_code == 422
+
+
+def test_write_endpoints_require_token():
+    client = TestClient(app)
+    valid = client.get("/api/profile").json()  # a valid CompanyProfile body
+    # Valid body but NO token -> 403 on every profile-mutating endpoint
+    assert client.put("/api/profile", json=valid).status_code == 403
+    assert client.post("/api/profile/save", json=valid).status_code == 403
+    assert client.post("/api/profile/import", json={"url": "https://example.com"}).status_code == 403
+    # Wrong token -> 403
+    assert client.put("/api/profile", json=valid, headers={"X-QP-Write-Token": "nope"}).status_code == 403
 
 
 def test_import_with_invalid_scheme():
     client = TestClient(app)
-    
-    # Try to import with ftp URL
-    response = client.post("/api/profile/import", json={"url": "ftp://x"})
+    from quotepilot.web.guard import WRITE_TOKEN
+
+    # ftp URL with a valid token -> 422 (scheme rejected)
+    response = client.post("/api/profile/import", json={"url": "ftp://x"},
+                           headers={"X-QP-Write-Token": WRITE_TOKEN})
     assert response.status_code == 422
 
 

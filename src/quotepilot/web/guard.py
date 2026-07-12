@@ -8,12 +8,25 @@ bounded. The real backstop is an Alibaba Cloud spend cap on the account.
 
 from __future__ import annotations
 
+import os
 import threading
 import time
 from collections import defaultdict, deque
 from datetime import date
 
 from fastapi import HTTPException, Request
+
+# Shared write token for profile-mutating endpoints. This is DETERRENCE, not
+# auth — the frontend is open source so the token ships in client JS. It stops
+# casual drive-by defacement of the demo profile (an attacker must read the
+# source), while the real backstops stay rate-limit + ephemeral /tmp storage +
+# the prepaid credit cap. Override per-deploy with QP_WRITE_TOKEN.
+WRITE_TOKEN = os.getenv("QP_WRITE_TOKEN", "qp-demo-write-2026")
+
+
+def require_write_token(request: Request) -> None:
+    if request.headers.get("x-qp-write-token", "") != WRITE_TOKEN:
+        raise HTTPException(status_code=403, detail="Missing or invalid write token.")
 
 # --- input caps ---
 MAX_EMAIL_CHARS = 20_000
