@@ -102,6 +102,8 @@
     <path id="wq" class="wire q" d="M756,150 V196" marker-end="url(#arw)"/>
     <!-- pipeline <-> FX API (bottom) -->
     <path id="wf" class="wire a" d="M740,558 V536" marker-end="url(#arw)"/>
+    <!-- FC -> ephemeral /tmp store (bottom right) -->
+    <path id="ws" class="wire" d="M890,532 V558" marker-end="url(#arw)"/>
 
     <!-- animated flow overlays -->
     <path class="flow" id="f1" d="M232,300 H322" stroke="#7fa8cf"/>
@@ -162,6 +164,14 @@
       <text class="lbl t-zh" x="674" y="617">USD/CNY, cached</text>
     </g>
 
+    <!-- Ephemeral per-instance store (all user data lives here) -->
+    <g>
+      <rect class="node" x="880" y="558" width="246" height="64" style="fill:#fff;stroke:#e6d6c2"/>
+      <text class="lbl t-tag" x="898" y="583" fill="var(--ali)">EPHEMERAL STORE · /tmp</text>
+      <text class="lbl t-sub" x="898" y="601" style="fill:var(--ink);font-weight:650">accounts · profiles · runs — per instance</text>
+      <text class="lbl t-zh" x="898" y="617">临时存储 · 实例回收自动清除</text>
+    </g>
+
     <!-- Human approval gate -->
     <g class="gate" id="gate">
       <rect class="g" x="986" y="238" width="130" height="124"/>
@@ -189,6 +199,10 @@
     <g class="pop" id="chip2">
       <rect x="330" y="512" width="250" height="34" rx="8" style="fill:#eef3f9;stroke:#c4d8e8"/>
       <text class="lbl badge" x="346" y="533" fill="var(--blue)">⚖️ Legal terms are fixed, not generated</text>
+    </g>
+    <g class="pop" id="chip3">
+      <rect x="330" y="554" width="250" height="34" rx="8" style="fill:#fdf6e8;stroke:#eeda9f"/>
+      <text class="lbl badge" x="346" y="575" fill="var(--amber)">🔑 Per-user login — data isolated</text>
     </g>
   </svg>
 
@@ -242,6 +256,7 @@ function reset(){
   gate.classList.remove("active");
   document.getElementById("chip1").classList.remove("on");
   document.getElementById("chip2").classList.remove("on");
+  document.getElementById("chip3").classList.remove("on");
 }
 async function loop(){
   while(true){
@@ -261,7 +276,8 @@ async function loop(){
     }
     setFlow(2,false); setFlow(3,false);
     document.getElementById("chip1").classList.add("on"); await sleep(250);
-    document.getElementById("chip2").classList.add("on");
+    document.getElementById("chip2").classList.add("on"); await sleep(250);
+    document.getElementById("chip3").classList.add("on");
     setFlow(4,true);                                  // pipeline -> gate
     await sleep(900);
     cap.innerHTML = "<b>4.</b> " + CAPS[3];
