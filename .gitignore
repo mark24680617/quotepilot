@@ -34,3 +34,6 @@ scratch_video/
 
 data/users.local.json
 data/profiles.local/
+
+# internal planning doc — never publish
+PLAN.md
