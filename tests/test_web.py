@@ -129,6 +129,18 @@ def test_auth_login_and_signup():
     assert client.post("/api/auth", json={"username": "admin", "password": ADMIN_TEST_PASSWORD}).status_code == 200
 
 
+def test_judge_demo_account_gets_full_profile():
+    # public judge account: seeded automatically, password is public by design
+    r = client.post("/api/auth", json={"username": "judge", "password": "qwen2026"})
+    assert r.status_code == 200
+    h = {"Authorization": "Bearer " + r.json()["token"]}
+    prof = client.get("/api/profile", headers=h).json()
+    assert prof["seller"]["name_en"]        # LUQ LABS demo profile, not blank
+    assert prof["catalog"]
+    # wrong password on the seeded account -> 401 (it's a real account)
+    assert client.post("/api/auth", json={"username": "judge", "password": "WRONGPASS"}).status_code == 401
+
+
 def test_new_user_gets_blank_profile_admin_gets_luqlabs():
     admin_h = {"Authorization": "Bearer " + client.post(
         "/api/auth", json={"username": "admin", "password": ADMIN_TEST_PASSWORD}).json()["token"]}

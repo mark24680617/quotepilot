@@ -27,6 +27,13 @@ ADMIN_USER = "admin"
 # s.yaml) and is never committed. If it is unset, the admin username is still
 # reserved but cannot be logged into (see _load_users).
 ADMIN_PASSWORD = os.getenv("QP_ADMIN_PASSWORD", "")
+
+# Shared demo account for hackathon judges — the password is PUBLIC by design
+# (printed on the login page, README and Devpost). It gets its own copy of the
+# demo company profile (see profile.py), so judges can run the full flow
+# without touching the admin account.
+DEMO_USER = os.getenv("QP_DEMO_USER", "judge")
+DEMO_PASSWORD = os.getenv("QP_DEMO_PASSWORD", "qwen2026")
 USERNAME_RE = re.compile(r"^[A-Za-z0-9_.-]{3,32}$")
 
 _lock = threading.Lock()
@@ -50,6 +57,7 @@ def _load_users() -> dict:
             users = json.loads(path.read_text(encoding="utf-8"))
         except Exception:
             users = {}
+    changed = False
     if ADMIN_USER not in users:  # reserve the admin username
         salt = secrets.token_hex(16)
         # If no admin password is configured, seed an unguessable random one so
@@ -57,6 +65,13 @@ def _load_users() -> dict:
         seed_pw = ADMIN_PASSWORD or secrets.token_urlsafe(32)
         users[ADMIN_USER] = {"salt": salt, "hash": _hash(seed_pw, salt),
                              "created_at": datetime.now(timezone.utc).isoformat()}
+        changed = True
+    if DEMO_USER not in users:  # seed the public judge demo account
+        salt = secrets.token_hex(16)
+        users[DEMO_USER] = {"salt": salt, "hash": _hash(DEMO_PASSWORD, salt),
+                            "created_at": datetime.now(timezone.utc).isoformat()}
+        changed = True
+    if changed:
         _save_users(users)
     return users
 

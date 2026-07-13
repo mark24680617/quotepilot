@@ -506,6 +506,9 @@ function renderAuth() {
       </div>
       <p class="char-hint" id="authHint" style="margin-top:10px;min-height:16px"></p>
       <button class="btn btn-pri btn-big" id="authBtn" style="margin-top:6px;width:100%">${esc(L("Continue", "继续"))}</button>
+      <p class="sub" style="margin-top:14px;text-align:center;font-size:12.5px">
+        ${esc(L("Judging the hackathon? Demo account: ", "黑客松评委？演示账号："))}<code class="mono" style="background:var(--blue-ghost);padding:2px 8px;border-radius:6px">judge / qwen2026</code>
+      </p>
     </div>
   </div>`;
   const user = $("#authUser"), pass = $("#authPass"), hint = $("#authHint"), btn = $("#authBtn");

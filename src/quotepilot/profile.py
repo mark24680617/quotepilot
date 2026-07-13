@@ -46,6 +46,7 @@ class CompanyProfile(BaseModel):
 
 DEFAULT_PROFILE_PATH = config.DATA_DIR / "company_profile.json"
 ADMIN_USER = "admin"  # the seeded account that owns the bundled LUQ LABS profile
+DEMO_USER = os.getenv("QP_DEMO_USER", "judge")  # public judge account — gets its own copy of the demo profile
 
 
 def _profiles_dir() -> Path:
@@ -85,9 +86,9 @@ def load_profile(username: str | None = None) -> CompanyProfile:
             return CompanyProfile.model_validate_json(store.read_text(encoding="utf-8"))
         except Exception:
             pass  # corrupt store falls back below
-    # No saved profile yet: admin (and the anonymous/CLI default) get LUQ LABS;
-    # every other user starts blank.
-    if username is None or username == ADMIN_USER:
+    # No saved profile yet: admin, the judge demo account and the anonymous/CLI
+    # default get LUQ LABS; every other user starts blank.
+    if username is None or username in (ADMIN_USER, DEMO_USER):
         return _bundled_default()
     return blank_profile()
 
