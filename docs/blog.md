@@ -58,8 +58,9 @@ I built a ~150-line dispatcher (`scripts/qwen_dev.py`): hand it a task spec, it
 sends the spec to a chosen Qwen model, parses the returned files into a staging
 area, and appends token usage to a ledger. Nothing lands in the repo until I
 review it. Over the build, Qwen wrote the FastAPI backend, the approval
-dashboard, the settings UI, the runs index, and more — twelve dispatches, a few
-cents each.
+dashboard, the settings UI, the runs index, and more — fourteen dispatches,
+**$0.81 total**, a few cents each. Even the demo video's voiceover is Qwen
+(`qwen3-tts-flash`).
 
 The pattern that emerged: **describe the interfaces precisely, and a code model
 fills them in impressively well.** When my task spec pinned down exact function
@@ -97,6 +98,15 @@ discount-field name mismatch that would have 422'd every settings save, and a
 stored-XSS in a free-text config field. Both would have shipped. Verified
 findings only; the skeptics killed the noise.
 
+**Filming the demo caught the best bug of all.** The demo video is recorded
+programmatically (Playwright drives the real app; ffmpeg cuts each scene to the
+voiceover). While reviewing the edit-then-approve scene frame by frame, I
+noticed the issued quote document still showed the *pre-edit* numbers — the
+orchestrator was rendering the quote object it held before the human gate,
+while the edit endpoint had replaced the gate's copy. On-screen: totals said
+$32,550, the artifact said $21,930. One-line fix, a regression test, redeploy —
+and a new rule: **watch your own demo like a judge would.**
+
 ## The human gate is the product
 
 It would have been easy to make QuotePilot fully autonomous and call it a day.
@@ -123,5 +133,5 @@ Qwen built most of QuotePilot. I made sure it never did the math.
 
 ---
 
-**Try it:** https://mark24680617.github.io/quotepilot/ · **Code:**
-https://github.com/mark24680617/quotepilot
+**Try it:** https://mark24680617.github.io/quotepilot/ (demo login:
+`judge` / `qwen2026`) · **Code:** https://github.com/mark24680617/quotepilot

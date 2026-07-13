@@ -52,6 +52,17 @@ artifacts: quote HTML (print-ready) · reply email draft · JSONL audit trail
 | Extraction & risk sweep | `qwen-flash` | fast + cheap workers |
 | Catalog mapping (strict JSON) | `qwen3-coder-plus` | reliable structured output |
 
+## Try the live demo
+
+**https://mark24680617.github.io/quotepilot/** — sign in with the public demo
+account **`judge` / `qwen2026`** (its company profile is a private copy of the
+bundled demo company, so feel free to edit anything). Click the
+**中 inquiry_zh_1.txt** sample → **Run Autopilot** → watch the 6-stage pipeline
+→ edit a quantity at the human gate → **Approve & issue** → open the bilingual
+quote. Or sign up with any username — new accounts start blank and can be
+onboarded by hand or with the AI website import. Demo data is ephemeral (the
+serverless instance wipes it on recycle).
+
 ## Quickstart
 
 ```bash

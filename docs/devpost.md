@@ -5,7 +5,16 @@
 - 🔗 **Live demo:** https://mark24680617.github.io/quotepilot/
 - 💻 **Repo (MIT):** https://github.com/mark24680617/quotepilot
 - ☁️ **Backend (Alibaba Cloud FC):** https://quotepilot-kafogbnbjc.ap-southeast-1.fcapp.run
+- 🎬 **Demo video (<2 min):** *(YouTube link — fill in after upload)*
 - 🏷️ **Track 4 — Autopilot Agent**
+
+## Try it in 60 seconds (judges)
+1. Open the live demo and sign in with the public demo account: **`judge` / `qwen2026`**.
+2. Click the **中 inquiry_zh_1.txt** sample chip → **Run Autopilot** — watch the 6-stage pipeline run live on Alibaba Cloud (~15 s).
+3. At the human gate: see the bilingual **risk flag** (the customer asks for a Chinese VAT fapiao a US entity can't issue), then **✎ Edit quote** — change a quantity → **Recalculate** (server-side Decimal math).
+4. **Approve & issue** → open the rendered bilingual quotation + ready-to-send reply email.
+
+Or create any username+password — new accounts start with a **blank company profile** you can fill by hand or with the AI **"Import from website"** onboarding.
 
 ## Inspiration
 QuotePilot was inspired by the real, expensive, and time-consuming manual workflow faced by US software companies selling to Chinese enterprises. The process typically involves:
@@ -63,13 +72,18 @@ human-in-the-loop pause, expressed through the framework.
 - **Qwen3-Coder-Plus**: Used for strict structured-output (catalog mapping) and also wrote most of the app.
 
 ### "Built by Qwen"
-The app itself was largely written by Qwen models via a dispatch harness (`scripts/qwen_dev.py`) with a supervising agent reviewing and accepting output. Total model spend was under $1 of the $40 credit.
+The app itself was largely written by Qwen models via a dispatch harness (`scripts/qwen_dev.py`) with a supervising agent reviewing and accepting output — 14 tasks, ~184k tokens, **$0.81** of the $40 credit. The demo video is Qwen too: voiceover by **qwen3-tts-flash**, recorded programmatically with Playwright.
+
+### Cost per quote
+A full run (parse → price → risk → bilingual draft) uses **≈3,500 Qwen tokens ≈ $0.02** — the token count is shown in-app after every run.
 
 ## Safety & correctness
 - **Decimal Math**: All monetary calculations are done using the `Decimal` type in Python to ensure precision.
 - **Fixed Legal Terms**: Fixed bilingual clauses (HKIAC arbitration, Chinese text controlling, no-fapiao tax note) are used, and LLMs never write legal terms.
 - **Authoritative Risk Rules**: Rule-based risk flags are authoritative; a "block" flag disables approval.
 - **Audit Trail**: Full JSONL audit trail for every step of the process.
+- **Per-user auth & data isolation**: login-or-signup accounts, per-user company profiles, run ownership enforced server-side (owner-or-admin on view/edit/approve and artifact downloads).
+- **Hardened public API**: per-IP rate limits + a global daily model-budget circuit breaker, SSRF-hardened website import, sandboxed artifact viewing, locked-down CORS — audited as an open-source public deployment (see SECURITY.md). 48 tests green.
 
 These safety measures are crucial for a money and legal document, ensuring that the quotes are accurate, legally sound, and traceable.
 
@@ -78,6 +92,7 @@ These safety measures are crucial for a money and legal document, ensuring that 
 - **Python Version Mismatch**: Custom.debian10 shipped with Python 3.7 instead of 3.10, so we switched to debian12.
 - **SSRF Hardening**: Implemented SSRF hardening for the website-import feature.
 - **Preventing LLMs from Doing Math**: Designed the system to prevent LLMs from performing arithmetic, ensuring all calculations are done in code.
+- **The bug the demo video caught**: while filming the edit-then-approve scene we noticed the issued artifact still carried the pre-edit numbers — the orchestrator was rendering its pre-gate quote object. Fixed the same hour, with a regression test. Filming your own demo is a surprisingly good QA pass.
 
 ## Accomplishments / What's next
 - **Deployed & Working End-to-End**: The system is fully deployed and working end-to-end.
@@ -90,15 +105,10 @@ These safety measures are crucial for a money and legal document, ensuring that 
 - Support for more currencies.
 
 ## Built with
-- Qwen
-- Alibaba Cloud Function Compute
-- DashScope
-- AgentScope
-- Python
-- FastAPI
-- GitHub Pages
-- Decimal
-- JSONL
-- CORS
-- Debian 12
-- SSRF Hardening
+- qwen-max · qwen-flash · qwen3-coder-plus · qwen3-tts-flash (video voiceover)
+- Alibaba Cloud Function Compute 3.0 (Serverless Devs)
+- DashScope (OpenAI-compatible API)
+- AgentScope 2.0
+- Python · FastAPI · Pydantic · Jinja2
+- GitHub Pages (static SPA, vanilla JS)
+- Playwright + ffmpeg (programmatic demo-video production)
