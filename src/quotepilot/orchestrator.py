@@ -68,6 +68,18 @@ def run_autopilot(
 
     audit.log("hitl_requested")
     decision = gate.review(quote)
+    # The web gate lets the reviewer edit line items before deciding (the edit
+    # endpoint replaces gate.quote) — pick up the edited quote so quote.json,
+    # the summary and the rendered artifacts match what was actually approved.
+    edited = getattr(gate, "quote", None)
+    if edited is not None and edited is not quote:
+        quote = edited
+        (run_dir / "quote.json").write_text(quote.model_dump_json(indent=2), encoding="utf-8")
+        audit.log(
+            "quote_edited_at_gate",
+            total_usd=str(quote.total_usd),
+            total_cny=str(quote.total_cny),
+        )
     audit.log("hitl_decision", action=decision.action, notes=decision.notes)
 
     artifacts = {
