@@ -11,8 +11,9 @@ $40 hackathon credit.**
 Here's what that actually felt like, where it was magic, and where I had to keep
 both hands on the wheel.
 
-- **Live demo:** https://mark24680617.github.io/quotepilot/
+- **Live demo:** https://mark24680617.github.io/quotepilot/ (demo login: `judge` / `qwen2026`)
 - **Repo:** https://github.com/mark24680617/quotepilot
+- **2-min demo video:** https://youtu.be/00BlsBs3ba4
 
 ## The problem is boring, expensive, and perfect for an agent
 

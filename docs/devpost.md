@@ -5,7 +5,7 @@
 - 🔗 **Live demo:** https://mark24680617.github.io/quotepilot/
 - 💻 **Repo (MIT):** https://github.com/mark24680617/quotepilot
 - ☁️ **Backend (Alibaba Cloud FC):** https://quotepilot-kafogbnbjc.ap-southeast-1.fcapp.run
-- 🎬 **Demo video (<2 min):** *(YouTube link — fill in after upload)*
+- 🎬 **Demo video (<2 min):** https://youtu.be/00BlsBs3ba4
 - 🏷️ **Track 4 — Autopilot Agent**
 
 ## Try it in 60 seconds (judges)
