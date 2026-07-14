@@ -37,3 +37,7 @@ data/profiles.local/
 
 # internal planning doc — never publish
 PLAN.md
+
+# tool-generated local files
+.serena/
+AGENTS.md
