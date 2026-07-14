@@ -6,6 +6,7 @@
 - 💻 **Repo (MIT):** https://github.com/mark24680617/quotepilot
 - ☁️ **Backend (Alibaba Cloud FC):** https://quotepilot-kafogbnbjc.ap-southeast-1.fcapp.run
 - 🎬 **Demo video (<2 min):** https://youtu.be/00BlsBs3ba4
+- ✍️ **Blog post (build story):** https://dev.to/markgege/i-had-qwen-build-a-qwen-powered-app-and-sat-in-the-reviewers-chair-4phe
 - 🏷️ **Track 4 — Autopilot Agent**
 
 ## Try it in 60 seconds (judges)

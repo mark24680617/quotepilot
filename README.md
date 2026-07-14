@@ -55,6 +55,7 @@ artifacts: quote HTML (print-ready) · reply email draft · JSONL audit trail
 ## Try the live demo
 
 🎬 **2-minute demo video:** https://youtu.be/00BlsBs3ba4
+✍️ **Build story:** [I had Qwen build a Qwen-powered app — and sat in the reviewer's chair](https://dev.to/markgege/i-had-qwen-build-a-qwen-powered-app-and-sat-in-the-reviewers-chair-4phe)
 
 **https://mark24680617.github.io/quotepilot/** — sign in with the public demo
 account **`judge` / `qwen2026`** (its company profile is a private copy of the
